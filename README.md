@@ -4,7 +4,7 @@
 [![skills.sh](https://skills.sh/b/ryunana/xbloom-studio-recipe-skill)](https://skills.sh/ryunana/xbloom-studio-recipe-skill)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-这是一个 Hermes Agent Skill，用于根据咖啡豆基础参数，生成可直接填入 xBloom Studio App / Copilot 创作模式的完整冲煮方案。
+这是一个通用 Agent Skill，不绑定特定 agent。它用于根据咖啡豆基础参数，生成可直接填入 xBloom Studio App / Copilot 创作模式的完整冲煮方案。
 
 ![演示](assets/demo.gif)
 
@@ -20,7 +20,7 @@
 
 ## 安装
 
-仓库发布后，可以通过 Skills CLI 从 GitHub 安装：
+推荐通过 Skills CLI 从 GitHub 安装，适用于支持 Agent Skills / `SKILL.md` 格式的 agent 环境：
 
 ```bash
 npx skills add ryunana/xbloom-studio-recipe-skill -g
@@ -28,14 +28,15 @@ npx skills add ryunana/xbloom-studio-recipe-skill -g
 
 也可以手动安装：
 
-把本仓库复制到你的 Hermes skills 目录，例如：
+把 `SKILL.md` 复制到你正在使用的 agent 会读取的 skills 目录。不同 agent 的目录不一样，下面用 `AGENT_SKILLS_DIR` 代指你的实际 skills 根目录：
 
 ```bash
-mkdir -p ~/.hermes/skills/leisure/xbloom-studio-recipe
-cp SKILL.md ~/.hermes/skills/leisure/xbloom-studio-recipe/SKILL.md
+export AGENT_SKILLS_DIR="$HOME/.config/agent-skills"
+mkdir -p "$AGENT_SKILLS_DIR/xbloom-studio-recipe"
+cp SKILL.md "$AGENT_SKILLS_DIR/xbloom-studio-recipe/SKILL.md"
 ```
 
-然后开启一个新的 Hermes 会话，直接请求生成 xBloom Studio 冲煮方案即可。
+安装后开启一个新的 agent 会话，直接请求生成 xBloom Studio 冲煮方案即可。
 
 ## 示例 Prompt
 

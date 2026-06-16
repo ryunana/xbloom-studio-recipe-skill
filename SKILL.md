@@ -6,9 +6,9 @@ author: ryunana
 license: MIT
 platforms: [linux, macos, windows]
 metadata:
-  hermes:
-    tags: [coffee, xbloom, xbloom-studio, brewing, recipe, pourover]
-    related_skills: []
+  tags: [coffee, xbloom, xbloom-studio, brewing, recipe, pourover]
+  compatibility: [agent-skills, skill-md]
+  related_skills: []
 ---
 
 # xBloom Studio Recipe Engineer
