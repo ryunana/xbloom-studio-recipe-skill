@@ -1,0 +1,30 @@
+[
+  {
+    "name": "ethiopia-duwancho-expressive-natural",
+    "prompt": "用 xbloom-studio-recipe 给这支豆子出一套 xBloom Studio App 可直接填写的方案：ETHIOPIA DUWANCHO，74158 Natural，花香、杨梅、蔓越莓、橙子、油桃、青芒。默认 15g、240ml、RO 水。",
+    "expected_constraints": {
+      "dose_g": 15,
+      "total_water_ml": 240,
+      "ratio": "1:16",
+      "grind_range": [48, 52],
+      "rpm_allowed": [100, 110],
+      "pour_count": 4,
+      "pour_sum_ml": 240,
+      "flow_range_ml_s": [3.0, 3.5],
+      "pause_range_s": [0, 59]
+    }
+  },
+  {
+    "name": "c40-conversion",
+    "prompt": "我平时 C40 30 clicks 冲浅烘花果豆，请转换为 xBloom Studio 起始研磨并给出配方。",
+    "expected_constraints": {
+      "c40_30_equivalent_xbloom": 50,
+      "light_roast_adjusted_grind_range": [48, 52]
+    }
+  },
+  {
+    "name": "wait-troubleshooting",
+    "prompt": "xBloom Studio 冲煮时出现 WAIT，杯子没动，App 滤杯选择正确，配方是 15g/240ml。帮我只改一个变量修正。",
+    "expected_behavior": "优先建议研磨粗 2 档或关闭中后段振动；不要第一步升温。"
+  }
+]

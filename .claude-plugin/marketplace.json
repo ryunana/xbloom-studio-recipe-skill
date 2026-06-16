@@ -1,0 +1,24 @@
+{
+  "name": "xbloom-studio-recipe-skill",
+  "owner": {
+    "name": "ryunana",
+    "url": "https://github.com/ryunana"
+  },
+  "metadata": {
+    "description": "Marketplace metadata for the xBloom Studio recipe skill."
+  },
+  "plugins": [
+    {
+      "name": "xbloom-studio-recipe",
+      "description": "Generate executable xBloom Studio App / Copilot brew recipes from coffee-bean parameters, with device constraints, C40 conversion, RO-water compensation, WAIT avoidance, and one-variable troubleshooting.",
+      "version": "1.0.0",
+      "author": {
+        "name": "ryunana",
+        "url": "https://github.com/ryunana"
+      },
+      "source": "./",
+      "category": "leisure",
+      "homepage": "https://github.com/ryunana/xbloom-studio-recipe-skill"
+    }
+  ]
+}
