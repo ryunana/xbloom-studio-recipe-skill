@@ -1,0 +1,17 @@
+开源了一个 xBloom Studio 冲煮方案 Skill。
+
+它不是泛泛地说“磨细一点、温度高一点”，而是把 xBloom Studio 的真实设备约束写进 Skill：研磨 1-80、C40 clicks 转换、RPM、流速、温度、Omni 平底滤杯注水逻辑、RO 水补偿，以及 WAIT / 防溢出的避坑。
+
+你只要给咖啡豆信息，比如产地、处理法、风味、粉量、水量和用水，它会输出一套 xBloom Coffee App / Copilot 创作模式可直接填写的分段冲煮参数。
+
+我最看重的是它的“每次只改一个变量”修正路线：偏酸、偏苦、风味空薄时，不会把所有参数一起乱改，比较容易复盘。
+
+安装：
+npx skills add ryunana/xbloom-studio-recipe-skill -g
+
+项目：
+github.com/ryunana/xbloom-studio-recipe-skill
+
+非 xBloom 官方项目，MIT License。
+
+#xBloom #咖啡 #手冲咖啡 #AgentSkills #AI工具 #咖啡器具 #开源项目

@@ -1,0 +1,5 @@
+/Users/a677/Library/Mobile Documents/com~apple~CloudDocs/我/项目/xbloom-studio-recipe-skill/social-card-xbloom-skill/output/xhs-01-cover.png
+/Users/a677/Library/Mobile Documents/com~apple~CloudDocs/我/项目/xbloom-studio-recipe-skill/social-card-xbloom-skill/output/xhs-02-input-output.png
+/Users/a677/Library/Mobile Documents/com~apple~CloudDocs/我/项目/xbloom-studio-recipe-skill/social-card-xbloom-skill/output/xhs-03-constraints.png
+/Users/a677/Library/Mobile Documents/com~apple~CloudDocs/我/项目/xbloom-studio-recipe-skill/social-card-xbloom-skill/output/xhs-04-install-flow.png
+/Users/a677/Library/Mobile Documents/com~apple~CloudDocs/我/项目/xbloom-studio-recipe-skill/social-card-xbloom-skill/output/xhs-05-who-needs-it.png
