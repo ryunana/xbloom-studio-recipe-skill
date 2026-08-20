@@ -54,6 +54,10 @@ mkdir -p "$AGENT_SKILLS_DIR/xbloom-studio-recipe"
 cp SKILL.md "$AGENT_SKILLS_DIR/xbloom-studio-recipe/SKILL.md"
 ```
 
+WorkBuddy 用户可将整个仓库复制到用户级技能目录 `~/.workbuddy/skills/xbloom-studio-recipe/`（目录名与 frontmatter `name` 一致，重启 WorkBuddy 生效）。
+
+For WorkBuddy, copy the whole repo into the user-level skill directory `~/.workbuddy/skills/xbloom-studio-recipe/` (directory name must match the frontmatter `name`; restart WorkBuddy to activate).
+
 安装后开启一个新的 agent 会话，直接请求生成 xBloom Studio 冲煮方案即可。
 
 After installation, start a new agent session and ask for an xBloom Studio brew recipe.
