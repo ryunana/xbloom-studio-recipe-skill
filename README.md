@@ -1,5 +1,7 @@
 # xBloom Studio 冲煮方案 Skill / xBloom Studio Recipe Skill
 
+![xBloom Studio Recipe Skill 双语项目主视觉](assets/hero.png)
+
 [![Agent Skills](https://img.shields.io/badge/Agent%20Skills-xBloom%20Studio-blueviolet)](SKILL.md)
 [![skills.sh](https://skills.sh/b/ryunana/xbloom-studio-recipe-skill)](https://skills.sh/ryunana/xbloom-studio-recipe-skill)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
