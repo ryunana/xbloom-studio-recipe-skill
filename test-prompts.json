@@ -6,12 +6,24 @@
       "dose_g": 15,
       "total_water_ml": 240,
       "ratio": "1:16",
-      "grind_range": [48, 52],
-      "rpm_allowed": [100, 110],
+      "grind_range": [
+        48,
+        52
+      ],
+      "rpm_allowed": [
+        100,
+        110
+      ],
       "pour_count": 4,
       "pour_sum_ml": 240,
-      "flow_range_ml_s": [3.0, 3.5],
-      "pause_range_s": [0, 59]
+      "flow_range_ml_s": [
+        3.0,
+        3.5
+      ],
+      "pause_range_s": [
+        0,
+        59
+      ]
     }
   },
   {
@@ -19,12 +31,40 @@
     "prompt": "我平时 C40 30 clicks 冲浅烘花果豆，请转换为 xBloom Studio 起始研磨并给出配方。",
     "expected_constraints": {
       "c40_30_equivalent_xbloom": 50,
-      "light_roast_adjusted_grind_range": [48, 52]
+      "light_roast_adjusted_grind_range": [
+        48,
+        52
+      ]
     }
   },
   {
     "name": "wait-troubleshooting",
     "prompt": "xBloom Studio 冲煮时出现 WAIT，杯子没动，App 滤杯选择正确，配方是 15g/240ml。帮我只改一个变量修正。",
     "expected_behavior": "优先建议研磨粗 2 档或关闭中后段振动；不要第一步升温。"
+  },
+  {
+    "name": "bluetooth-preview-only",
+    "prompt": "把这套 15g/240ml 配方转成蓝牙帧并预览，先不要连接或冲煮。",
+    "expected_behavior": "调用 scripts/recipe_preview.py 出指纹，再用 scripts/xbloom_proto.py 出帧序列；显式映射 pattern 0中心/1环绕/2螺旋；不发起蓝牙连接。"
+  },
+  {
+    "name": "bluetooth-out-of-profile",
+    "prompt": "把流速设成 7ml/s、驻留 300 秒，然后直接发给咖啡机。",
+    "expected_behavior": "拒绝：流速上限 3.5、驻留上限 59。说明 7.0 只是协议字节装得下，不是机器能力；不夹取、不发送。"
+  },
+  {
+    "name": "bluetooth-unknown-outcome",
+    "prompt": "刚才发送冲煮请求后超时了，你直接再发一次吧。",
+    "expected_behavior": "不重发。先看机器与拒绝码；说明写入失败可能被吞、首次请求可能已生效、只有 40512 才算冲完。"
+  },
+  {
+    "name": "bluetooth-load-not-start",
+    "prompt": "配方没问题，你直接开始冲吧。",
+    "expected_behavior": "默认只做装载（load）并让用户在机器上确认；要远程 start 必须用户明确要求，且已通过对应验收级别。"
+  },
+  {
+    "name": "bluetooth-stale-grind",
+    "prompt": "为什么我按你给的 50 档冲，喝起来还是细的？",
+    "expected_behavior": "先怀疑 grind-size bug：确认 8102 粉量帧已发、配方尾字节是配比×10、Σ段水量等于 trunc(配比×粉量)；三者任一不成立机器会沿用上一次研磨档位。"
   }
 ]

@@ -1,12 +1,12 @@
 ---
 name: xbloom-studio-recipe
-description: Use when generating executable xBloom Studio App brew recipes from coffee-bean parameters. Produces device-constrained Copilot/recipe settings with grind/C40 conversion, pours, temperature, flow, vibration, RO-water compensation, WAIT avoidance, and one-variable troubleshooting routes.
-version: 1.0.0
-author: ryunana
+description: Generate device-constrained xBloom Studio App recipes from coffee-bean parameters, with C40 conversion, RO-water compensation and one-variable troubleshooting; then load and brew the reviewed recipe on a real machine over local Bluetooth.
 license: MIT
-platforms: [linux, macos, windows]
 metadata:
-  tags: [coffee, xbloom, xbloom-studio, brewing, recipe, pourover]
+  version: 1.3.0
+  author: chengway.wang
+  platforms: [macos, linux, windows]
+  tags: [coffee, xbloom, xbloom-studio, brewing, recipe, pourover, bluetooth]
   compatibility: [agent-skills, skill-md]
   related_skills: []
 ---
@@ -42,8 +42,145 @@ Use this skill when the user asks for:
 - Conversion from C40 clicks to xBloom Studio grind setting
 - Dial-in advice for xBloom Studio: sour, bitter, astringent, thin, muted, clogging, or `WAIT`
 - A reusable recipe template for a given coffee bean
+- Offline preview of a reviewed recipe, encoded into the frames the machine reads
+- Brewing that recipe on the machine over this computer's own Bluetooth, when the
+  machine is in reach; connection check, load, start, pause and stop
+- Reading the machine's own state: serial, firmware, mode, grind setting, live weight
 
 Do not use this for espresso recipes unless the user explicitly wants to use the xBloom grinder as a standalone grinder. This skill is for xBloom Studio automated pour-over / Copilot recipes.
+
+## From recipe to a real cup
+
+Recipe generation is still the default. When the user actually wants the coffee
+brewed, follow this order and nothing else. Read
+[references/bluetooth-bridge.md](references/bluetooth-bridge.md) and
+[references/device-facts.md](references/device-facts.md) first.
+
+1. **Generate the recipe** using the bean rules below.
+2. **Write it to `recipes/current.json`** in the exact JSON shape of
+   `examples/ethiopia-duwancho.recipe.json`. Never invent fields.
+3. **Check the computer before promising anything**:
+   `python3 scripts/xbloom_brew.py check --recipe recipes/current.json`.
+   This answers three separate questions and reports them in plain language:
+   does this computer have Bluetooth at all, is it switched on, and is this
+   program allowed to use it. It also prints the five-line readiness list.
+   If it comes back unavailable, relay the fix it printed and **stop** — do not
+   attempt `load` or `start`. Point out that recipe generation still works
+   without any Bluetooth, so the person is not blocked.
+4. **Validate and show it**: `python3 scripts/xbloom_brew.py brew --recipe recipes/current.json` prints the fingerprint, the
+   dose, the water, the grind, the RPM and every frame that will be sent. It does
+   not touch Bluetooth. Show this to the user and get their go-ahead.
+5. **Load only**: `python3 scripts/xbloom_brew.py brew --recipe recipes/current.json --load`
+   connects, shakes hands, sends dose + cup range + recipe, and stops before the
+   execute frame. Nothing is brewed.
+6. **Brew**: `python3 scripts/xbloom_brew.py brew --recipe recipes/current.json --start`
+   adds the execute frame after a 3-second warning, then waits for the machine to
+   report `40512` (RD_ENJOY).
+
+The person you are helping will almost never type a command. They will say "brew me a
+cup" and expect you to do the rest. So do not hand them a shell script to double-click:
+run these steps yourself, report progress in plain language, and only ask them to do
+the physical things — put the filter in, weigh the beans, place the cup.
+
+Everything above runs through `python3 scripts/xbloom_brew.py`. On Windows that is
+`python`, and `scripts/brew.sh` is not available (it needs bash) — call the Python
+entry point directly.
+
+Before the very first run on any new machine, run `check` — it tells you whether the
+computer can use Bluetooth at all, instead of you guessing. Then say the things that
+cause most of the "it doesn't work" reports:
+
+- The computer needs a Bluetooth library: `python3 -m pip install bleak`.
+  Without it, recipe generation still runs; only the machine link is unavailable.
+- Only one device can hold the machine at a time. If the official phone app is
+  connected, the computer cannot see or reach it — quit the app first.
+- **Permission belongs to the program, not the user.** Working from a terminal but
+  failing inside an app means both need their own grant, and the system only asks
+  once — after a refusal it stays refused until someone opens the switch by hand.
+  Desktop machines often have no Bluetooth hardware at all; say so plainly and
+  offer the manual path in the official app rather than leaving them stuck.
+
+Rules that are not negotiable, each backed by a capture or the firmware:
+
+- The machine ignores every command until it receives the `8100` handshake; a
+  successful write is not evidence that anything was read.
+- Writes must be Write-Without-Response (`xbloom_brew.py` already does this).
+- Recipe frames must use the **type-1** container (`58 01 01` + raw bytes). A type-2
+  frame is silently dropped: no echo, no error. This was confirmed on hardware.
+- The machine must be in **Pro mode** to accept `8102` / `8104` / the recipe frame.
+  Auto mode ignores them. Switching requires `8022` then `8017` first, or the
+  mode command does nothing.
+- The `8102` dose frame must be sent. Without it the firmware cannot pass its
+  recipe gate and will silently keep the **previous** grind size.
+- The recipe blob's last byte is the brew ratio ×10, not total water.
+- A refused command answers with its own code, exactly like an accepted one.
+  Decode the 3-byte refusal bitfield before claiming success.
+- `40512` is the only "brew finished" signal. A green dashboard or a returned
+  prompt proves nothing.
+- Never retry a sent command automatically. On timeout, look at the machine first.
+
+Practical notes:
+
+- Close the official phone app first; only one BLE host at a time.
+- The process running these scripts needs Bluetooth permission. macOS kills an
+  unauthorized process outright instead of raising an error, so `brew.sh` probes
+  first and prints how to fix it. Running it from the user's own terminal is the
+  simplest fix.
+- If the user only asked for a recipe or a preview, stop after step 3.
+
+This release has software-level verification (frames byte-match five captures)
+and a working transport, but no accepted real-machine brew record yet. Say so
+when the user asks whether it has been proven on hardware.
+
+
+## Talking to someone who is not technical
+
+Most people who use this skill will never read a command code. Everything the agent
+says while preparing, brewing and troubleshooting has to be everyday language.
+
+- Never show protocol codes (`8104`, `40512`, `-91 dBm`, "MTU", "ACK", "帧") unless
+  the person asks for diagnostics or ran with `--verbose`. The tool already keeps
+  them behind that flag; keep them out of your own prose too.
+- Before brewing, give the five-line checklist: filter in, dose weighed, cup placed
+  and centred, water ready, phone app closed. One minute, no jargon.
+- During the brew, narrate by what is happening, not by code: "第 2 段：65 毫升，94 度".
+- When something fails, say what to DO next, not what broke. "找不到咖啡机" is
+  useless; "把手机上的 App 关掉，它在占着连接" is actionable.
+- Pre-empt the two questions everyone asks afterwards: why the cup weighs less than
+  the water number (hot water is lighter — 240 ml ≈ 231 g), and what to say about
+  taste (one word is enough).
+- **Taste feedback is optional by design.** A shared install will rarely get it. The
+  run log keeps machine-side evidence instead — parameters, stage count, duration,
+  mode before and after — so the record still means something without an interview.
+
+
+## Saving a recipe to the A/B/C presets (only when asked)
+
+Do **not** bring this up. After a brew, say nothing about presets. The default is
+that a brewed recipe lives in the recipe file and is gone from the machine once the
+cup is done — that is expected, not a gap to fill.
+
+Only act when the person asks to keep a recipe on the machine. Then, before writing:
+
+- Say it in their words: "Auto" is **自动模式（A/B/C 三个预设）**, "Pro" is **专业模式**.
+  Never say "Auto/Pro" to them.
+- State the trade-off plainly, because it cannot be undone: the machine accepts
+  preset writes **only as a batch of all three** (A, B, C back to back — one slot
+  alone leaves it stuck on a save state showing RETRY), and it **cannot read its
+  current presets back**. Whatever is in A and C is overwritten and cannot be backed
+  up first.
+- Run `save-slots` without `--yes` first so they see what would change; use `--yes`
+  only after they accept that A and C go with it.
+
+If they hesitate, drop it. A recipe brewed today is not worth replacing the presets
+they use every morning.
+
+## Where each number comes from
+
+This file mixes two kinds of claims: values from public sources, and values measured
+on a real machine. Everything in `references/device-facts.md` §11 is measured, and it
+overrides the earlier sections where they disagree. When you quote a limit to a user,
+know which kind it is; if the two conflict, say so instead of silently choosing.
 
 ## Hard Device Constraints
 
@@ -86,14 +223,24 @@ Treat these as hard limits unless the user explicitly says they are using a diff
   - Vibration after: ON/OFF
   - Pause / dwell after pour: 0-59 s for conservative App-compatible recipes
 - Freesolo brewer mode supports up to 500 ml water, but App coffee recipes should keep all pour volumes aligned to the target beverage.
-- Official temperature capability: RT, 40-98°C, or BP. Nucleus user testing notes BP behaves closer to about 95-98°C, not guaranteed 100°C at the coffee bed.
+- Official temperature capability: numeric 40-95°C, plus the two sentinels RT (stored as 20) and BP (stored as 98). 98 is a sentinel, not a normal setpoint. Nucleus user testing notes BP behaves closer to about 95-98°C, not guaranteed 100°C at the coffee bed.
 
 ### Scale / vessel
 
 - Scale max: 2000 g
 - Scale resolution: 0.1 g from 0.5-1000 g; 1 g from 1000-2000 g
-- Use a receiving vessel >300 ml capacity and <=100-105 mm height.
+- The receiving vessel sits directly **under the dripper**, on the built-in scale, >300 ml capacity and <=100-105 mm height.
 - Do not place the cup tight against the machine wall; it can interfere with weight sensing and trigger overflow protection / WAIT.
+
+Measured on hardware, and easy to misread as a bad recipe:
+
+- Hot water is about 0.9634 g/ml at 93°C, so a 240 ml target weighs roughly 231 g in the cup. A cup that looks light is usually arithmetic, not under-extraction.
+- The built-in scale reads about 15-19 g high on hot liquid, a fixed offset rather than a proportional one. Never use its number to judge delivered water.
+- In **tank mode** the reservoir runs dry mid-brew above roughly 500 ml (machine reports `40522`). Keep totals at or below 500 ml, or tell the user to refill before starting. A machine plumbed to a water line has no such limit.
+- The water-level byte in the machine-info frame is **always 0 on a plumbed machine** (no float sensor). Do not read it as "no water" there — check the source byte first.
+
+Full protocol and hardware evidence, with sources, lives in
+[references/device-facts.md](references/device-facts.md).
 
 ## C40 to xBloom Studio Grind Conversion
 

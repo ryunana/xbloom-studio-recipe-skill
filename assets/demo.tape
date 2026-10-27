@@ -4,7 +4,7 @@ Set Width 1100
 Set Height 720
 Set Theme "Catppuccin Mocha"
 
-Type "npx skills add ryunana/xbloom-studio-recipe-skill -g"
+Type "# 把 skill 目录放进 ~/.workbuddy/skills/ 即可"
 Enter
 Sleep 1s
 Type "用 xbloom-studio-recipe 给 ETHIOPIA DUWANCHO 74158 Natural 出一套 xBloom Studio App 方案"

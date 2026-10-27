@@ -47,10 +47,13 @@ def main() -> None:
     if not isinstance(frontmatter, dict):
         fail("frontmatter must parse as a YAML mapping")
 
-    required = ["name", "description", "version", "author", "license", "metadata"]
+    required = ["name", "description", "license", "metadata"]
     missing = [key for key in required if not frontmatter.get(key)]
     if missing:
         fail(f"frontmatter missing required fields: {', '.join(missing)}")
+    metadata = frontmatter['metadata']
+    if not isinstance(metadata, dict) or not metadata.get('version') or not metadata.get('author'):
+        fail('metadata must include version and author')
 
     if frontmatter["name"] != "xbloom-studio-recipe":
         fail("frontmatter name must be xbloom-studio-recipe")
@@ -65,9 +68,22 @@ def main() -> None:
     if len(content) > 100_000:
         fail("SKILL.md exceeds 100,000 chars")
 
-    for path in ["README.md", "LICENSE", "SOURCES.md", "test-prompts.json", "examples/ethiopia-duwancho.md"]:
+    for path in ["README.md", "LICENSE", "SOURCES.md", "test-prompts.json", "examples/ethiopia-duwancho.md",
+                 "examples/ethiopia-duwancho.recipe.json", "references/bluetooth-bridge.md",
+                 "references/device-facts.md", "scripts/xbloom_proto.py",
+                 "scripts/recipe_preview.py", "scripts/xbloom_brew.py", "scripts/brew.sh",
+                 "recipes/current.json", "tests/test_protocol_conformance.py",
+                 "tests/test_brew_cli.py"]:
         if not (ROOT / path).exists():
             fail(f"{path} missing")
+
+    if (ROOT / "scripts/xbloom_bridge.py").exists():
+        fail("scripts/xbloom_bridge.py must not ship: it routes brews through the upstream "
+             "bridge that skips the handshake and the dose frame")
+
+    marketplace = json.loads((ROOT / ".claude-plugin/marketplace.json").read_text(encoding="utf-8"))
+    if marketplace['plugins'][0]['version'] != metadata['version']:
+        fail('marketplace and skill versions differ')
 
     prompts = json.loads((ROOT / "test-prompts.json").read_text(encoding="utf-8"))
     if not isinstance(prompts, list) or len(prompts) < 3:
