@@ -70,7 +70,10 @@ for required in ["README.md", "LICENSE", "SOURCES.md", "CHANGELOG.md", "examples
 if Path("scripts/xbloom_bridge.py").exists():
     errors.append("scripts/xbloom_bridge.py must not ship (skips handshake and dose frame)")
 
-# 打包发出去之前容易漏掉的一件事：本机绝对路径写进包里。
+# 打包发出去之前容易漏掉的两件事：营销素材混进来、私人路径写进包里。
+# 在 git 仓库里这两种情况是正常的（发布素材本来就跟着仓库走），所以只在打包场景检查。
+if not Path(".git").exists() and Path("social-card-xbloom-skill").exists():
+    warnings.append("包里有 social-card-xbloom-skill/，那是发布素材，不该跟着 skill 分发")
 private = re.compile(r"/Users/[A-Za-z0-9._-]+/|/home/[A-Za-z0-9._-]+/")
 for path in Path(".").rglob("*"):
     if not path.is_file() or "__pycache__" in path.parts or path.suffix in {".png", ".gif", ".zip"}:

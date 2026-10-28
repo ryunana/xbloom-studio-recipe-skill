@@ -420,12 +420,18 @@ async def run_brew(args):
                 write_run_log(payload, outcome, pours_seen, time.monotonic() - started, session, args.note)
                 return 1
             elif code in EVENT_STOPPED:
-                # 机器先报"停止"，约两秒后才报"完成"，不能据此判失败
-                done = await session.wait_for(EVENT_DONE, timeout=6)
+                # 机器先报"停止"，约两秒后才报"完成"，不能据此判失败。
+                # 但"完成"这条本身也会丢——信号弱时整条通知就没了（2026-10-28 实测到一次）。
+                # 真正可靠的判据是"每一段都收到过注水事件"，那是机器主动报的。
+                done = await session.wait_for(EVENT_DONE, timeout=8)
                 if done is not None:
                     outcome = "completed"
                     break
-                say("  咖啡机停了，但没说完成。看一眼杯里有多少水，告诉我。")
+                if pours_seen >= len(pours_plan):
+                    say("  四段都注完了。最后那条完成信号没收到，但水已经出完，这杯是成的。")
+                    outcome = "completed_no_signal"
+                    break
+                say("  咖啡机提前停了。看一眼杯里还有多少水，告诉我。")
                 outcome = "stopped"
                 write_run_log(payload, outcome, pours_seen, time.monotonic() - started, session, args.note)
                 return 1

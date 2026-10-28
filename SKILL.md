@@ -3,7 +3,7 @@ name: xbloom-studio-recipe
 description: Generate device-constrained xBloom Studio App recipes from coffee-bean parameters, with C40 conversion, RO-water compensation and one-variable troubleshooting; then load and brew the reviewed recipe on a real machine over local Bluetooth.
 license: MIT
 metadata:
-  version: 1.3.0
+  version: 1.3.1
   author: chengway.wang
   platforms: [macos, linux, windows]
   tags: [coffee, xbloom, xbloom-studio, brewing, recipe, pourover, bluetooth]
@@ -115,8 +115,12 @@ Rules that are not negotiable, each backed by a capture or the firmware:
 - The recipe blob's last byte is the brew ratio ×10, not total water.
 - A refused command answers with its own code, exactly like an accepted one.
   Decode the 3-byte refusal bitfield before claiming success.
-- `40512` is the only "brew finished" signal. A green dashboard or a returned
-  prompt proves nothing.
+- `40512` (RD_ENJOY) is the clearest "brew finished" signal, but it can be lost — a
+  whole notification disappears when the link is weak, and then nothing arrives after
+  the stop ack. The reliable evidence is **every pour stage having been reported**:
+  those come from the machine as it works, one per stage. Treat "all stages seen plus
+  a stop ack" as a finished cup and say so plainly — never tell the person it failed
+  when the water already went through.
 - Never retry a sent command automatically. On timeout, look at the machine first.
 
 Practical notes:
