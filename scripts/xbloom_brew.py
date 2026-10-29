@@ -150,6 +150,15 @@ def human_failure(exc: Exception) -> str:
     return f"出错了：{text}。先看一眼机器屏幕，把上面显示的告诉我。"
 
 
+def brew_succeeded(outcome: str) -> bool:
+    """这杯算不算成了。
+
+    除了正常的 completed，还有一种：四段都注完了、机器也报了停止，但最后那条
+    完成通知丢了。水已经出完，不能告诉用户"没冲成"。
+    """
+    return outcome in ("completed", "completed_no_signal")
+
+
 def write_run_log(payload, outcome, pours_seen, duration, session, note=None):
     """每次冲煮留一条记录。没有口感也能用：机器侧的数据本身就是证据。"""
     try:
@@ -439,7 +448,7 @@ async def run_brew(args):
                 outcome = "completed"
                 break
 
-        if outcome == "completed":
+        if brew_succeeded(outcome):
             duration = time.monotonic() - started
             water = payload["recipe"]["grandWater"]
             say("")
@@ -447,6 +456,8 @@ async def run_brew(args):
             say(f"杯里大约 {round(water * CUP_WEIGHT_FACTOR)} 克——热水比冷水轻，不是 {water} 克，正常。")
             say("先别急着喝，烫。凉一点之后花香会更清楚。")
             say("")
+            if outcome == "completed_no_signal":
+                say("（机器最后那条完成通知没送到，但四段都注完了，这杯不受影响。）")
             say("喝着偏酸、偏苦、还是太淡？说一句就行，下一杯我只改一个地方。")
             write_run_log(payload, outcome, pours_seen, duration, session, args.note)
             return 0

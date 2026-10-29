@@ -113,5 +113,27 @@ class RunLogTests(unittest.TestCase):
         self.assertNotIn("40522", brew.human_failure(Exception("缺水")))
 
 
+class SuccessCriterionTests(unittest.TestCase):
+    """什么算"冲好了"。
+
+    2026-10-29 踩过一次：加了"四段齐全但收尾信号丢失"这个状态，却没把它算进成功，
+    结果杯子满了、屏幕写"等太久"。这组测试守的就是这条线。
+    """
+
+    def test_both_success_states_count(self):
+        self.assertTrue(brew.brew_succeeded("completed"))
+        self.assertTrue(brew.brew_succeeded("completed_no_signal"))
+
+    def test_failures_do_not_count(self):
+        for outcome in ("stopped", "timeout", "fault", "no_water", "unknown"):
+            self.assertFalse(brew.brew_succeeded(outcome), outcome)
+
+    def test_success_branch_uses_the_helper(self):
+        """防止有人把判定改回写死的 outcome == "completed"。"""
+        source = (ROOT / "scripts/xbloom_brew.py").read_text()
+        self.assertIn("brew_succeeded(outcome)", source)
+        self.assertNotIn('outcome == "completed":', source)
+
+
 if __name__ == "__main__":
     unittest.main()

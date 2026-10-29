@@ -3,7 +3,7 @@ name: xbloom-studio-recipe
 description: Generate device-constrained xBloom Studio App recipes from coffee-bean parameters, with C40 conversion, RO-water compensation and one-variable troubleshooting; then load and brew the reviewed recipe on a real machine over local Bluetooth.
 license: MIT
 metadata:
-  version: 1.3.1
+  version: 1.3.2
   author: chengway.wang
   platforms: [macos, linux, windows]
   tags: [coffee, xbloom, xbloom-studio, brewing, recipe, pourover, bluetooth]
