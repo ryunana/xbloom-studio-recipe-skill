@@ -25,3 +25,9 @@ python -m unittest discover -s tests -v
 
 ## 安装使用
 技能的使用与安装见 [README.md](README.md)，行为规范见 [SKILL.md](SKILL.md)。改 SKILL.md 时同步 CHANGELOG.md。
+
+## 发版
+版本号以 `SKILL.md` 的 `metadata.version` 为准，`CHANGELOG.md` 同步。发版 = 在 `main` 上打 `vX.Y.Z` tag 并建 GitHub Release，必须由用户明确同意后再做。
+
+## 运行时数据不进仓库
+`runs/` 是真机冲煮记录，已在 `.gitignore`。`recipes/current.json` 会被运行时改写，提交前确认你改它是有意为之，不要把某次冲煮的临时参数带进 PR。
