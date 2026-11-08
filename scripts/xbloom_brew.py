@@ -166,9 +166,11 @@ def write_run_log(payload, outcome, pours_seen, duration, session, note=None):
                       or (Path(__file__).resolve().parent.parent / "runs"))
         if not folder.is_dir():
             folder.mkdir(parents=True)
+        brewer = recipe_preview.brewer_of(payload)
         record = {
             "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
             "outcome": outcome,
+            "brewer": brewer["label"],
             "pours_observed": pours_seen,
             "pours_planned": len(payload["recipe"]["pours"]),
             "duration_s": round(duration, 1),
@@ -184,6 +186,9 @@ def write_run_log(payload, outcome, pours_seen, duration, session, note=None):
         say(f"\n这次冲煮已记录：runs/{name}")
         if not note:
             say("（口感是选填的。你说一句，我就把这条记录补上，下次调整有据可依。）")
+        if brewer["experimental"]:
+            say(f"「{brewer['label']}」还是实验性的。这次结果对别人很有用，方便的话到这里说一声（附上这条记录更好）：")
+            say(f"  {recipe_preview.FEEDBACK_URL}")
     except Exception as exc:  # noqa: BLE001
         say(f"（记录没写成功，不影响咖啡：{exc}）")
 
@@ -202,7 +207,7 @@ def build(payload: dict):
         dose=int(round(payload["doseGrams"])),
         grinder_size=int(payload["recipe"]["grinderSize"]),
         rpm=int(payload["recipe"]["rpm"]),
-        cup=proto.DEFAULT_CUP,
+        cup=recipe_preview.brewer_of(payload)["protocol_cup"],
     )
 
 
@@ -211,6 +216,10 @@ def show_plan(plan, payload, verbose=False):
     water = payload["recipe"]["grandWater"]
     say(f"{payload['doseGrams']:g} 克豆 / {water} 毫升水 / 研磨 {payload['recipe']['grinderSize']} / "
         f"{len(pours)} 段")
+    brewer = recipe_preview.brewer_of(payload)
+    say(f"  滤杯：{brewer['label']}")
+    if brewer["experimental"]:
+        say("  ⚠ 实验性：这个滤杯还没有在本项目里真机验证过")
     say("  预计杯里约 %d 克（热水比冷水轻，这是正常的）" % round(water * CUP_WEIGHT_FACTOR))
     if verbose:
         say(f"  配方指纹 {recipe_preview.digest(payload)}")
@@ -361,6 +370,16 @@ async def run_brew(args):
     if not (args.load or args.start):
         print("干跑结束：没有连接蓝牙。要装载加 --load，要真的出水加 --start。")
         return 0
+
+    brewer = recipe_preview.brewer_of(payload)
+    if args.start and brewer["experimental"] and not args.experimental_ok:
+        say(f"这次用的是「{brewer['label']}」，本项目还没用它真机验证过，所以真冲之前要你再确认一次：")
+        say("  1. 滤杯稳稳坐在机器上，出水口对着滤杯中间")
+        say("  2. 滤杯和下面的杯子都没有碰到机身")
+        say("  3. 下面的杯子放得下整杯咖啡，滤杯底部离杯口有空隙")
+        say("都确认了，加 --experimental-ok 再来一次。冲完不管成没成，欢迎反馈：")
+        say(f"  {recipe_preview.FEEDBACK_URL}")
+        return 1
 
     if not require_bluetooth(args.force):
         return 2
@@ -607,6 +626,8 @@ async def run_save_slots(args):
               for index, name in enumerate("ABC")]
 
     say("这一步是把配方存进机器的三个预设（A / B / C），不是冲咖啡。")
+    if recipe_preview.brewer_of(payload)["experimental"]:
+        say("注意：预设里不存滤杯信息。从面板按预设冲时，机器用的是它自己当前的杯型设置。")
     say("有件事得先说清楚：机器要求三个预设一起写，而且读不回原来存的是什么。")
     say("所以写进去之后，A、B、C 三个都会变成同一份配方——你原来的预设会被覆盖。")
 
@@ -962,6 +983,8 @@ def main(argv=None):
     brew.add_argument("--timeout", type=float, default=300.0, help="等待完成事件的秒数")
     brew.add_argument("--note", default=None, help="这一杯的口感备注（选填），会写进出杯记录")
     brew.add_argument("--verbose", action="store_true", help="显示协议细节（给技术排查用）")
+    brew.add_argument("--experimental-ok", action="store_true",
+                      help="确认使用未经真机验证的滤杯（V60 01 / 其他滤杯）真冲")
     add_common(brew)
     brew.set_defaults(func=run_brew)
 

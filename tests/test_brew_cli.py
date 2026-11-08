@@ -136,6 +136,78 @@ class SuccessCriterionTests(unittest.TestCase):
         self.assertNotIn('outcome == "completed":', source)
 
 
+
+def v60_payload():
+    payload = json.loads(EXAMPLE.read_text())
+    payload["cupType"] = "other"
+    payload["brewer"] = {"id": "v60-01"}
+    return payload
+
+
+class BrewerTests(unittest.TestCase):
+    """选滤杯：杯型帧跟着滤杯走；非 Omni 允许真冲，但必须多一次确认。#11"""
+
+    def _write(self, payload):
+        import tempfile
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        path = Path(temp.name) / "recipe.json"
+        path.write_text(json.dumps(payload))
+        return path
+
+    def _run(self, argv):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+            code = brew.main(argv)
+        return code, out.getvalue()
+
+    def test_omni_keeps_omni_cup_frame(self):
+        plan = dict(brew.build(json.loads(EXAMPLE.read_text())))
+        cup = [packet for label, packet in plan.items() if label.startswith("set_cup")]
+        self.assertEqual(cup[0], proto.frame(proto.CMD_SET_CUP,
+                                             [proto.float_bits(110.0), proto.float_bits(90.0)]))
+
+    def test_v60_sends_other_cup_frame_matching_capture(self):
+        plan = brew.build(v60_payload())
+        cup = [packet for label, packet in plan if label.startswith("set_cup")]
+        self.assertEqual(cup[0].hex().upper(), proto.CAPTURES["set_cup_200_80"])
+
+    def test_dry_run_shows_brewer_and_experimental_flag(self):
+        code, text = self._run(["brew", "--recipe", str(self._write(v60_payload()))])
+        self.assertEqual(code, 0)
+        self.assertIn("滤杯：V60 01", text)
+        self.assertIn("实验性", text)
+        code, text = self._run(["brew", "--recipe", str(EXAMPLE)])
+        self.assertIn("滤杯：Omni（原装）", text)
+        self.assertNotIn("实验性", text)
+
+    def test_experimental_start_needs_explicit_ok_before_bluetooth(self):
+        code, text = self._run(["brew", "--recipe", str(self._write(v60_payload())), "--start"])
+        self.assertEqual(code, 1)
+        self.assertIn("--experimental-ok", text)
+        self.assertIn("issues/new", text)
+        self.assertNotIn("bleak", sys.modules)
+
+    def test_other_brewer_label_and_run_log(self):
+        import tempfile
+        payload = json.loads(EXAMPLE.read_text())
+        payload["cupType"] = "other"
+        payload["brewer"] = {"id": "other", "name": "Kalita Wave 155"}
+
+        class FakeSession:
+            info = {}
+            initial_mode = None
+        with tempfile.TemporaryDirectory() as temp:
+            os.environ["XBLOOM_RUNS_DIR"] = temp
+            self.addCleanup(os.environ.pop, "XBLOOM_RUNS_DIR", None)
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                brew.write_run_log(payload, "completed", 4, 160.0, FakeSession())
+            record = json.loads(next(Path(temp).glob("*.json")).read_text())
+        self.assertEqual(record["brewer"], "其他滤杯：Kalita Wave 155")
+        self.assertIn("issues/new", out.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main()
 

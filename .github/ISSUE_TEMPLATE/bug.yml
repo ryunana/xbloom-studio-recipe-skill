@@ -33,6 +33,16 @@ body:
     validations:
       required: true
   - type: dropdown
+    id: brewer
+    attributes:
+      label: 用的哪个滤杯
+      options:
+        - Omni（原装）
+        - V60 01
+        - 其他滤杯（在下面写是什么）
+    validations:
+      required: false
+  - type: dropdown
     id: agent
     attributes:
       label: 用的哪个 AI
