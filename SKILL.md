@@ -3,7 +3,7 @@ name: xbloom-studio-recipe
 description: Generate device-constrained xBloom Studio App recipes from coffee-bean parameters, with C40 conversion, RO-water compensation and one-variable troubleshooting; then load and brew the reviewed recipe on a real machine over local Bluetooth.
 license: MIT
 metadata:
-  version: 1.3.2
+  version: 1.3.3
   author: chengway.wang
   platforms: [macos, linux, windows]
   tags: [coffee, xbloom, xbloom-studio, brewing, recipe, pourover, bluetooth]
@@ -58,7 +58,10 @@ brewed, follow this order and nothing else. Read
 
 1. **Generate the recipe** using the bean rules below.
 2. **Write it to `recipes/current.json`** in the exact JSON shape of
-   `examples/ethiopia-duwancho.recipe.json`. Never invent fields.
+   `examples/ethiopia-duwancho.recipe.json`. Never invent fields. This file is
+   the user's own and is git-ignored (`recipes/*.json`); it does not exist on a
+   fresh install, so create it. To keep a recipe the user likes, also save it as
+   `recipes/<name>.json`. Never edit the example to hold a user's recipe.
 3. **Check the computer before promising anything**:
    `python3 scripts/xbloom_brew.py check --recipe recipes/current.json`.
    This answers three separate questions and reports them in plain language:

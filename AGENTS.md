@@ -30,4 +30,4 @@ python -m unittest discover -s tests -v
 版本号以 `SKILL.md` 的 `metadata.version` 为准，`CHANGELOG.md` 同步。发版 = 在 `main` 上打 `vX.Y.Z` tag 并建 GitHub Release，必须由用户明确同意后再做。
 
 ## 运行时数据不进仓库
-`runs/` 是真机冲煮记录，已在 `.gitignore`。`recipes/current.json` 会被运行时改写，提交前确认你改它是有意为之，不要把某次冲煮的临时参数带进 PR。
+`runs/`（真机冲煮记录）和 `recipes/*.json`（用户自己的配方，含 `current.json`）都在 `.gitignore`，不进仓库。测试和示例只用 `examples/ethiopia-duwancho.recipe.json`；不要为了测试去改用户配方，也不要把示例改成某次冲煮的参数。

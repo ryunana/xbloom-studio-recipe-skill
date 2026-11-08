@@ -63,7 +63,7 @@ if len(content) > 100_000:
 for required in ["README.md", "LICENSE", "SOURCES.md", "CHANGELOG.md", "examples/ethiopia-duwancho.md",
                  "references/bluetooth-bridge.md", "references/device-facts.md",
                  "scripts/xbloom_proto.py", "scripts/recipe_preview.py",
-                 "scripts/xbloom_brew.py", "scripts/brew.sh", "recipes/current.json"]:
+                 "scripts/xbloom_brew.py", "scripts/brew.sh", "recipes/README.md"]:
     if not Path(required).exists():
         errors.append(f"missing {required}")
 

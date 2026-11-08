@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 一条命令入口：找一个能跑的 python，转发给 xbloom_brew.py。
-# 不带参数时 = 干跑 recipes/current.json（不连蓝牙、不需要 bleak）。
+# 不带参数时 = 干跑 recipes/current.json；还没生成过就干跑示例配方（不连蓝牙、不需要 bleak）。
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
@@ -23,12 +23,17 @@ done
 # 干跑不需要蓝牙库，有解释器就够了
 PY="${PY:-$FOUND}"
 if [ -z "$PY" ]; then
-  echo "没找到 python3。装一个 Python 3.9+ 再来；只想看参数的话，直接读 recipes/current.json。"
+  echo "没找到 python3。装一个 Python 3.9+ 再来；只想看参数的话，直接读 recipes/current.json（还没生成就看 examples/ 里的示例）。"
   exit 2
 fi
 
 if [ "$#" -eq 0 ]; then
-  set -- brew --recipe "$ROOT/recipes/current.json"
+  RECIPE="$ROOT/recipes/current.json"
+  if [ ! -f "$RECIPE" ]; then
+    RECIPE="$ROOT/examples/ethiopia-duwancho.recipe.json"
+    echo "还没有你自己的配方（recipes/current.json），先拿示例配方干跑一遍。"
+  fi
+  set -- brew --recipe "$RECIPE"
 fi
 
 # 真要连机器时才检查蓝牙库，避免干跑被卡住
