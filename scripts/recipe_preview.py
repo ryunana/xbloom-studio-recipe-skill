@@ -21,6 +21,52 @@ class PreviewError(ValueError):
     pass
 
 
+# --- 滤杯 ---------------------------------------------------------------------
+# 物理滤杯 ≠ 机器杯型。机器只认杯型（Omni / Other …），决定 8104 发哪组重量区间；
+# 滤杯是给人看、给配方设计用的。只有 Omni 经过本项目真机验收，其余标为实验性：
+# 允许上机，但冲前必须多一次明确确认（--experimental-ok），冲后请用户回报。
+FEEDBACK_URL = "https://github.com/ryunana/xbloom-studio-recipe-skill/issues/new?template=bug.yml"
+
+BREWERS = {
+    "omni":   {"label": "Omni（原装）", "cup_type": "xdripper", "protocol_cup": 2,
+               "experimental": False},
+    "v60-01": {"label": "V60 01", "cup_type": "other", "protocol_cup": 3,
+               "experimental": True},
+    "other":  {"label": "其他滤杯", "cup_type": "other", "protocol_cup": 3,
+               "experimental": True},
+}
+
+
+def brewer_of(payload):
+    """配方用的是哪个滤杯。没写 brewer 时只能是 Omni（兼容 1.3.x 的配方）。"""
+    selected = payload.get("brewer", {"id": "omni"})
+    info = dict(BREWERS[selected["id"]])
+    info["id"] = selected["id"]
+    if selected["id"] == "other":
+        info["label"] = f"其他滤杯：{selected['name']}"
+    return info
+
+
+def validate_brewer(payload):
+    if "brewer" not in payload:
+        if payload["cupType"] != "xdripper":
+            raise PreviewError("cupType 是 other 时必须写 brewer，说明用的是哪个滤杯；不会默认当成 Omni")
+        return
+    brewer = payload["brewer"]
+    if not isinstance(brewer, dict) or brewer.get("id") not in BREWERS:
+        raise PreviewError(f"brewer.id 只能是 {' / '.join(BREWERS)}")
+    if brewer["id"] == "other":
+        exact_keys(brewer, ("id", "name"), "brewer")
+        name = brewer["name"]
+        if not isinstance(name, str) or not name.strip() or len(name) > 40:
+            raise PreviewError("brewer.name 要写清是什么滤杯（1..40 个字），例如 Kalita Wave 155")
+    else:
+        exact_keys(brewer, ("id",), "brewer")
+    expected = BREWERS[brewer["id"]]["cup_type"]
+    if payload["cupType"] != expected:
+        raise PreviewError(f"{BREWERS[brewer['id']]['label']} 的 cupType 必须是 {expected}")
+
+
 def exact_keys(value, keys, label):
     if not isinstance(value, dict) or set(value) != set(keys):
         raise PreviewError(f"{label} 必须且只能包含: {', '.join(keys)}")
@@ -37,9 +83,12 @@ def number(value, lo, hi, label, integer=False, tenth=False):
 
 def validate(payload):
     """Studio 约束与协议编码约束的交集。不做任何静默夹取或四舍五入。"""
-    exact_keys(payload, ("cupType", "doseGrams", "recipe"), "payload")
-    if payload["cupType"] != "xdripper":
-        raise PreviewError("当前 profile 只支持 xdripper / Omni Dripper")
+    optional = ("brewer",) if isinstance(payload, dict) and "brewer" in payload else ()
+    keys = ("cupType", "doseGrams", "recipe") + optional
+    exact_keys(payload, keys, "payload")
+    if payload["cupType"] not in ("xdripper", "other"):
+        raise PreviewError("cupType 只能是 xdripper（Omni）或 other（其他滤杯）")
+    validate_brewer(payload)
     number(payload["doseGrams"], 5, 18, "doseGrams", tenth=True)
     recipe = payload["recipe"]
     exact_keys(recipe, ("grinderSize", "rpm", "grandWater", "pours"), "recipe")
@@ -94,6 +143,7 @@ def preview(payload):
         "recipe_sha256": digest(payload),
         "ratio": round(payload["recipe"]["grandWater"] / payload["doseGrams"], 3),
         "payload": payload,
+        "brewer": brewer_of(payload),
         "pattern_mapping": {"0": "center", "1": "circular", "2": "spiral"},
         "note": "doseGrams 是准备说明，不是蓝牙剂量指令。未接触任何硬件。",
     }

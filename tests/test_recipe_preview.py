@@ -95,5 +95,46 @@ class RecipeTests(unittest.TestCase):
             self.assertEqual(json.loads(out.getvalue())["mode"], "offline_preview")
 
 
+
+class BrewerValidationTests(unittest.TestCase):
+    """滤杯字段：写错就拒绝，绝不默认回退成 Omni。#11"""
+
+    def setUp(self):
+        self.base = recipe()
+
+    def check(self, **changes):
+        payload = dict(self.base, **changes)
+        return preview_mod.validate(payload)
+
+    def test_old_recipes_without_brewer_are_omni(self):
+        self.check()
+        self.assertEqual(preview_mod.brewer_of(self.base)["id"], "omni")
+        self.assertFalse(preview_mod.brewer_of(self.base)["experimental"])
+
+    def test_valid_brewers(self):
+        self.check(brewer={"id": "omni"})
+        self.check(cupType="other", brewer={"id": "v60-01"})
+        self.check(cupType="other", brewer={"id": "other", "name": "Origami S"})
+
+    def test_rejections(self):
+        bad = [
+            dict(cupType="other"),                                  # other 却没说是哪个滤杯
+            dict(brewer={"id": "v60-01"}),                          # V60 配 Omni 杯型
+            dict(cupType="other", brewer={"id": "omni"}),           # Omni 配 other 杯型
+            dict(cupType="other", brewer={"id": "other"}),          # 其他滤杯没写名字
+            dict(cupType="other", brewer={"id": "other", "name": "  "}),
+            dict(cupType="other", brewer={"id": "v60-01", "name": "x"}),
+            dict(brewer={"id": "chemex"}),
+            dict(cupType="tea"),
+        ]
+        for changes in bad:
+            with self.assertRaises(preview_mod.PreviewError, msg=str(changes)):
+                self.check(**changes)
+
+    def test_digest_unchanged_for_old_recipes(self):
+        """不写 brewer 的老配方，指纹不变（预览过的配方不会因为升级变成"另一份"）。"""
+        self.assertEqual(preview_mod.digest(self.base), preview_mod.digest(recipe()))
+
+
 if __name__ == "__main__":
     unittest.main()

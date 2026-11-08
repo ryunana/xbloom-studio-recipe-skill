@@ -3,7 +3,7 @@ name: xbloom-studio-recipe
 description: Generate device-constrained xBloom Studio App recipes from coffee-bean parameters, with C40 conversion, RO-water compensation and one-variable troubleshooting; then load and brew the reviewed recipe on a real machine over local Bluetooth.
 license: MIT
 metadata:
-  version: 1.3.3
+  version: 1.4.0
   author: chengway.wang
   platforms: [macos, linux, windows]
   tags: [coffee, xbloom, xbloom-studio, brewing, recipe, pourover, bluetooth]
@@ -38,7 +38,7 @@ Use this skill when the user asks for:
 
 - A xBloom Studio brew recipe
 - xBloom App parameters
-- Omni Dripper / xBloom original dripper recipe design
+- Omni Dripper / xBloom original dripper recipe design; V60 01 and other drippers (experimental)
 - Conversion from C40 clicks to xBloom Studio grind setting
 - Dial-in advice for xBloom Studio: sour, bitter, astringent, thin, muted, clogging, or `WAIT`
 - A reusable recipe template for a given coffee bean
@@ -56,7 +56,8 @@ brewed, follow this order and nothing else. Read
 [references/bluetooth-bridge.md](references/bluetooth-bridge.md) and
 [references/device-facts.md](references/device-facts.md) first.
 
-1. **Generate the recipe** using the bean rules below.
+1. **Generate the recipe** using the bean rules below, for the brewer chosen in
+   [Choosing the brewer](#choosing-the-brewer).
 2. **Write it to `recipes/current.json`** in the exact JSON shape of
    `examples/ethiopia-duwancho.recipe.json`. Never invent fields. This file is
    the user's own and is git-ignored (`recipes/*.json`); it does not exist on a
@@ -78,7 +79,45 @@ brewed, follow this order and nothing else. Read
    execute frame. Nothing is brewed.
 6. **Brew**: `python3 scripts/xbloom_brew.py brew --recipe recipes/current.json --start`
    adds the execute frame after a 3-second warning, then waits for the machine to
-   report `40512` (RD_ENJOY).
+   report `40512` (RD_ENJOY). For an experimental brewer it refuses and prints a
+   checklist instead; see [Choosing the brewer](#choosing-the-brewer).
+
+## Choosing the brewer
+
+The machine only knows a cup type; the physical dripper is ours to track. Three choices:
+
+| Brewer | JSON | Status |
+|---|---|---|
+| Omni (original) | `"cupType": "xdripper"`, `brewer` omitted or `{"id": "omni"}` | Verified on hardware by this project |
+| V60 01 | `"cupType": "other"`, `"brewer": {"id": "v60-01"}` | Experimental |
+| Any other dripper | `"cupType": "other"`, `"brewer": {"id": "other", "name": "Kalita Wave 155"}` | Experimental |
+
+**Remember the last one; ask only when it is unknown.** Before writing a new recipe,
+read the existing `recipes/current.json`: reuse its `brewer` (no `brewer` = Omni). Ask
+which dripper they use only when that file does not exist yet, or when the user says
+they switched. Always state the brewer in the recipe summary you show, so a wrong
+assumption gets corrected before brewing. For "other", record what they called it in
+`name`; never map an unknown dripper to Omni or V60.
+
+**Recipe design.** Every machine limit in this file still applies unchanged (dose,
+grind, RPM, flow, temperature, pause). What changes:
+
+- The "flat-bottom, don't centre-pour" guidance in Pour Pattern Strategy is Omni-specific.
+  On a conical dripper such as V60, Center and Spiral pours are both normal.
+- Vibration was characterised on the Omni; its effect in other drippers is unverified.
+  Keep it to the bloom unless the user asks.
+- Drawdown differs by dripper. Start from the bean rules, then dial in with one
+  variable at a time, grind first.
+- Do not invent dimensions, capacities or adapter compatibility for any dripper.
+
+**Hardware.** Loading works the same for every brewer. For V60 01 and "other",
+`--start` refuses until `--experimental-ok` is added, and prints a short physical
+checklist (dripper seated under the outlet, nothing touching the machine body, the
+cup below fits the full brew). Relay that checklist, get the user's explicit yes,
+and only then add the flag — never add it on your own. Cup-type frame: Omni sends
+`110/90`, Other sends `200/80` (see device-facts §8). After the brew, pass on the
+feedback link the script prints; results on experimental drippers are how they
+become verified. A `WAIT` on an experimental dripper is worth reporting there too.
 
 The person you are helping will almost never type a command. They will say "brew me a
 cup" and expect you to do the rest. So do not hand them a shell script to double-click:
@@ -197,7 +236,7 @@ Treat these as hard limits unless the user explicitly says they are using a diff
 
 - Machine: xBloom Studio
 - Target mode: Copilot / App custom recipe, unless user asks Auto Mode or Freesolo
-- Default brewer: xBloom Omni Dripper / original xBloom dripper
+- Default brewer: xBloom Omni Dripper / original xBloom dripper (others: see Choosing the brewer)
 - Default water: RO water if user does not specify otherwise
 - Default dose: 15 g
 - Default total water: 240 ml

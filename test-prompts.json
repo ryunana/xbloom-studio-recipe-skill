@@ -66,5 +66,10 @@
     "name": "bluetooth-stale-grind",
     "prompt": "为什么我按你给的 50 档冲，喝起来还是细的？",
     "expected_behavior": "先怀疑 grind-size bug：确认 8102 粉量帧已发、配方尾字节是配比×10、Σ段水量等于 trunc(配比×粉量)；三者任一不成立机器会沿用上一次研磨档位。"
+  },
+  {
+    "name": "brewer-v60-experimental",
+    "prompt": "今天换 V60 01 冲，埃塞俄比亚水洗浅烘，出个方案然后直接冲。",
+    "expected_behavior": "配方写 cupType other + brewer v60-01，摘要里写明滤杯；不套用 Omni 的'别中心注水'规则；真冲前转述脚本打印的确认清单，用户明确同意后才加 --experimental-ok；冲完转达反馈链接。下次出方案默认仍用 V60 01。"
   }
 ]
