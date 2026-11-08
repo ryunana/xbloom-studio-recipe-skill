@@ -24,13 +24,14 @@ def load(name, path):
 
 proto = load("xbloom_proto", ROOT / "scripts/xbloom_proto.py")
 brew = load("xbloom_brew", ROOT / "scripts/xbloom_brew.py")
+EXAMPLE = ROOT / "examples/ethiopia-duwancho.recipe.json"
 
 
 class DryRunTests(unittest.TestCase):
     def test_dry_run_prints_plan_without_bluetooth(self):
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
-            code = brew.main(["brew", "--recipe", str(ROOT / "recipes/current.json")])
+            code = brew.main(["brew", "--recipe", str(EXAMPLE)])
         text = out.getvalue()
         self.assertEqual(code, 0)
         self.assertIn("干跑结束", text)
@@ -40,7 +41,7 @@ class DryRunTests(unittest.TestCase):
         self.assertNotIn("bleak", sys.modules)
 
     def test_plan_matches_example_recipe(self):
-        payload = json.loads((ROOT / "recipes/current.json").read_text())
+        payload = json.loads(EXAMPLE.read_text())
         plan = brew.build(payload)
         labels = [label for label, _ in plan]
         self.assertTrue(labels[0].startswith("handshake"))
@@ -50,8 +51,8 @@ class DryRunTests(unittest.TestCase):
         self.assertEqual(struct.unpack('<H', plan[-1][1][3:5])[0], proto.CMD_EXECUTE)
 
     def test_current_recipe_is_valid_and_brewable(self):
-        """recipes/current.json 是"当前要冲的那份"，内容会随豆子变；只要求它合法且可编码。"""
-        payload = json.loads((ROOT / "recipes/current.json").read_text())
+        """示例配方必须合法且可编码（用户自己的 recipes/current.json 不进仓库，CI 里没有）。"""
+        payload = json.loads(EXAMPLE.read_text())
         sys.path.insert(0, str(ROOT / "scripts"))
         import recipe_preview
         recipe_preview.validate(payload)
@@ -60,7 +61,7 @@ class DryRunTests(unittest.TestCase):
 
     def test_invalid_recipe_exits_nonzero_before_bluetooth(self):
         import tempfile
-        bad = json.loads((ROOT / "recipes/current.json").read_text())
+        bad = json.loads(EXAMPLE.read_text())
         bad["recipe"]["pours"][0]["flowRate"] = 7.0
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "bad.json"
@@ -78,7 +79,7 @@ class RunLogTests(unittest.TestCase):
     """出杯记录：没有口感也要能留下机器侧证据。"""
 
     def _payload(self):
-        return json.loads((ROOT / "recipes/current.json").read_text())
+        return json.loads(EXAMPLE.read_text())
 
     def setUp(self):
         import tempfile
@@ -137,3 +138,19 @@ class SuccessCriterionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PersonalRecipeTests(unittest.TestCase):
+    """用户配方只留在本机：不能被 git 跟踪，否则升级（git pull）会和用户改动冲突。#7"""
+
+    def test_personal_recipes_are_git_ignored(self):
+        import shutil
+        import subprocess
+        if shutil.which("git") is None or not (ROOT / ".git").exists():
+            self.skipTest("不在 git 仓库里（打包场景）")
+        for name in ("recipes/current.json", "recipes/my-kenya.json"):
+            result = subprocess.run(["git", "check-ignore", "-q", name], cwd=ROOT)
+            self.assertEqual(result.returncode, 0, f"{name} 应被 .gitignore 忽略")
+        tracked = subprocess.run(["git", "ls-files", "recipes"], cwd=ROOT,
+                                 capture_output=True, text=True).stdout.split()
+        self.assertEqual(tracked, ["recipes/README.md"])

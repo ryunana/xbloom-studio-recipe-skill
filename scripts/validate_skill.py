@@ -72,7 +72,7 @@ def main() -> None:
                  "examples/ethiopia-duwancho.recipe.json", "references/bluetooth-bridge.md",
                  "references/device-facts.md", "scripts/xbloom_proto.py",
                  "scripts/recipe_preview.py", "scripts/xbloom_brew.py", "scripts/brew.sh",
-                 "recipes/current.json", "tests/test_protocol_conformance.py",
+                 "recipes/README.md", "tests/test_protocol_conformance.py",
                  "tests/test_brew_cli.py"]:
         if not (ROOT / path).exists():
             fail(f"{path} missing")

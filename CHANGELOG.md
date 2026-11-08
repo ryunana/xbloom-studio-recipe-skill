@@ -4,6 +4,23 @@
 
 ---
 
+## 1.3.3 — 2026-11-08
+
+**你调过的配方不再和升级打架。**
+
+`recipes/current.json` 以前是仓库里的文件，AI 每次生成配方都改它，于是装好的技能一直显示"有改动"，
+`git pull` 升级时会被拦下。现在 `recipes/*.json` 都只留在本机、不进仓库；测试和干跑改用
+`examples/ethiopia-duwancho.recipe.json`，`brew.sh` 在还没生成配方时自动拿示例干跑。（#7）
+
+**从旧版升级：** 如果你改过 `recipes/current.json`，`git pull` 会提示本地改动会被覆盖并停下（不会丢数据）。
+在技能目录里先把它挪开再拉：
+
+```bash
+cp recipes/current.json /tmp/my-recipe.json && git checkout -- recipes/current.json && git pull && cp /tmp/my-recipe.json recipes/current.json
+```
+
+---
+
 ## 1.3.2 — 2026-10-29
 
 **修 1.3.1 自己引入的错。**

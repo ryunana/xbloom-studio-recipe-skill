@@ -4,3 +4,6 @@
 __pycache__/
 *.pyc
 runs/
+
+# 用户自己的配方（AI 生成、你调过的）只留在本机，不进仓库
+recipes/*.json

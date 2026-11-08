@@ -99,12 +99,14 @@ git clone https://github.com/ryunana/xbloom-studio-recipe-skill \
   "$HOME/.workbuddy/skills/xbloom-studio-recipe"   # WorkBuddy 的路径
 ```
 
+**你的配方只留在本机：** AI 生成的配方写在 `recipes/current.json`，和你另存的 `recipes/*.json` 一样不进 git，`git pull` 升级技能不会冲掉。
+
 **依赖：** 生成配方**零依赖**，只要 Python 3.9+。连机器冲煮才需要 `pip install bleak`（Windows 上把命令里的 `python3` 换成 `python`）。
 
 **装完先跑体检**，它会把本机蓝牙状态和人话的准备清单一次说清：
 
 ```bash
-python3 scripts/xbloom_brew.py check --recipe recipes/current.json
+python3 scripts/xbloom_brew.py check
 ```
 
 **脚本都在 `scripts/`：** `xbloom_brew.py` 连机器（scan / info / check / grind / brew），`xbloom_proto.py` 只做协议编码与离线对拍，`recipe_preview.py` 校验配方。`brew.sh` 是 macOS / Linux 的便捷入口，会自动挑一个装了 `bleak` 的 Python（Windows 用不到，直接调 Python）。完整流程见 SKILL.md。
@@ -165,7 +167,7 @@ npx skills add ryunana/xbloom-studio-recipe-skill -g
 
 Recipe generation has **zero dependencies** beyond Python 3.9+. Brewing needs `pip install bleak`.
 
-Run `python3 scripts/xbloom_brew.py check --recipe recipes/current.json` first — it reports Bluetooth state and the readiness checklist in plain language.
+Run `python3 scripts/xbloom_brew.py check` first — it reports Bluetooth state and the readiness checklist in plain language.
 
 Read [references/device-facts.md](references/device-facts.md) before touching hardware: recipe frames of the wrong type are dropped silently, and Auto mode ignores configuration frames.
 
