@@ -1,0 +1,61 @@
+name: 新需求 / Feature
+description: 想让技能多做一件事，或把现有的做得更好
+title: "[需求] "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        说不全也没关系，写清"想解决什么问题"就够了，剩下的 AI 会接着问。
+  - type: textarea
+    id: problem
+    attributes:
+      label: 想解决什么问题
+      description: 现在哪里不顺、缺了什么。描述场景，不用想实现方式。
+      placeholder: 例：冲完一杯不知道下一杯该调什么
+    validations:
+      required: true
+  - type: dropdown
+    id: audience
+    attributes:
+      label: 给谁用
+      options:
+        - 我自己
+        - 装这个技能的其他用户
+        - 两者都是
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: 怎么算做好了
+      description: 做完之后你会看到什么。能一条条核对最好。
+      placeholder: |
+        例：
+        - 冲完后它主动问口感
+        - 根据口感只建议改一个参数
+    validations:
+      required: false
+  - type: dropdown
+    id: priority
+    attributes:
+      label: 急不急
+      options:
+        - 不急，先记下
+        - 这周想用
+        - 很急，影响冲咖啡
+    validations:
+      required: true
+  - type: checkboxes
+    id: hardware
+    attributes:
+      label: 是否涉及真机
+      options:
+        - label: 需要连咖啡机验证（需要我在机器旁配合）
+  - type: textarea
+    id: notes
+    attributes:
+      label: 补充
+      description: 截图、参考链接、你的想法，都可以贴。
+    validations:
+      required: false

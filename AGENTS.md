@@ -5,6 +5,7 @@ GitHub 上的 `main`（https://github.com/ryunana/xbloom-studio-recipe-skill）�
 本地不保留"另一个版本"：不长期维护 `codex/*`、`workbuddy/*` 之类的本地私有分支，不在别处放独立拷贝。
 
 ## 开工流程
+0. 每个改动先有一个 GitHub issue（用 `.github/ISSUE_TEMPLATE/` 里的需求或 Bug 模板）；用户口头提的需求由 agent 代建，PR 里写 `Closes #编号`。
 1. `git fetch origin`，从最新 `origin/main` 开分支：`agent/<工具名>-<主题>`，例如 `agent/claude-fix-timeout`。
 2. 小步提交，推到 origin，用 PR 合并到 `main`（squash）。
 3. CI（`validate-skill`）必须通过才能合并；合并后分支自动删除。
