@@ -414,7 +414,7 @@ class MappedCodesTests(unittest.TestCase):
 
     MAPPED = (9010, 9011, 40515, 40516, 40517, 40522, 50029, 50036, 65534,
               8100, 8022, 8017, 8102, 8104, 8001, 8004, 8002, 11511,
-              40505, 40526, 40506, 40507)
+              40505, 40526, 40506, 40507, 9002, 9007, 9008)
 
     def test_mapped_codes_not_flagged_unknown(self):
         clock = {"now": 0.0}
