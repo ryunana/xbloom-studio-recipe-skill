@@ -3,7 +3,7 @@ name: xbloom-studio-recipe
 description: Generate device-constrained xBloom Studio App recipes from coffee-bean parameters, with C40 conversion, RO-water compensation and one-variable troubleshooting; then load and brew the reviewed recipe on a real machine over local Bluetooth.
 license: MIT
 metadata:
-  version: 1.4.3
+  version: 1.4.4
   author: chengway.wang
   platforms: [macos, linux, windows]
   tags: [coffee, xbloom, xbloom-studio, brewing, recipe, pourover, bluetooth]
@@ -173,6 +173,11 @@ Rules that are not negotiable, each backed by a capture or the firmware:
   `40522` = `+WATER`; `40513` = wrap-up after an aborted-from-pause brew or when the
   done screen is dismissed by button (removing the cup does not emit it). A `40513`
   while a brew is still being awaited means the brew was aborted — stop waiting.
+  Panel/scale codes (#19): `9002` = enter scale mode, `9008` = exit to home,
+  `9007` = tare. Telemetry semantics verified on hardware: `40523` = cumulative
+  dispensed water in µL (pauses freeze it, resumes continue exactly), `20501` =
+  scale reading in grams (matches the panel; its small in-brew values are not yet
+  confirmed — may be flow rate or a tared delta).
 - Never retry a sent command automatically. On timeout, look at the machine first.
 - **Every brew record carries a notification timeline** (`timeline` in `runs/*.json`:
   seconds since the brew started, code, raw bytes; weight/volume telemetry thinned to
