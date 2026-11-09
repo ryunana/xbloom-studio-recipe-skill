@@ -3,7 +3,7 @@ name: xbloom-studio-recipe
 description: Generate device-constrained xBloom Studio App recipes from coffee-bean parameters, with C40 conversion, RO-water compensation and one-variable troubleshooting; then load and brew the reviewed recipe on a real machine over local Bluetooth.
 license: MIT
 metadata:
-  version: 1.4.2
+  version: 1.4.3
   author: chengway.wang
   platforms: [macos, linux, windows]
   tags: [coffee, xbloom, xbloom-studio, brewing, recipe, pourover, bluetooth]
@@ -161,10 +161,18 @@ Rules that are not negotiable, each backed by a capture or the firmware:
   Decode the 3-byte refusal bitfield before claiming success.
 - `40512` (RD_ENJOY) is the clearest "brew finished" signal, but it can be lost — a
   whole notification disappears when the link is weak, and then nothing arrives after
-  the stop ack. The reliable evidence is **every pour stage having been reported**:
+  the stop ack. On firmware V12.0D.400 it is not merely lossy: three mapped brews
+  ended with `40511` and no `40512` at all, so the machine may simply never send it
+  (#6). The reliable evidence is **every pour stage having been reported**:
   those come from the machine as it works, one per stage. Treat "all stages seen plus
   a stop ack" as a finished cup and say so plainly — never tell the person it failed
   when the water already went through.
+- Machine-state codes, mapped on hardware 2026-11-09 (#17): `9010`/`9011` = the
+  person pressed pause/resume on the machine; `40515`→`40516` = the machine held
+  then released on its own — the `WAIT` candidate; `40517` = idling alert (`+BEANS`);
+  `40522` = `+WATER`; `40513` = wrap-up after an aborted-from-pause brew or when the
+  done screen is dismissed by button (removing the cup does not emit it). A `40513`
+  while a brew is still being awaited means the brew was aborted — stop waiting.
 - Never retry a sent command automatically. On timeout, look at the machine first.
 - **Every brew record carries a notification timeline** (`timeline` in `runs/*.json`:
   seconds since the brew started, code, raw bytes; weight/volume telemetry thinned to

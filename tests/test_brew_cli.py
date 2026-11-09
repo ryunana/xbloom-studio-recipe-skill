@@ -232,14 +232,14 @@ class TimelineTests(unittest.TestCase):
 
     def test_unknown_codes_are_all_kept_with_raw_bytes_and_time(self):
         timeline, clock = self._timeline()
-        for step, code in enumerate((40517, 40517, 9010, 40555)):
+        for step, code in enumerate((49991, 49991, 49992, 40555)):
             clock["now"] = 100.0 + 118.0 + step
             frame = fake_frame(code)
             timeline.add(frame, code, "update")
-        self.assertEqual([e["code"] for e in timeline.entries], [40517, 40517, 9010, 40555])
+        self.assertEqual([e["code"] for e in timeline.entries], [49991, 49991, 49992, 40555])
         self.assertEqual(timeline.entries[0]["t"], 118.0)
-        self.assertEqual(timeline.entries[0]["hex"], fake_frame(40517).hex().upper())
-        self.assertEqual(timeline.summary(), {40517: 2, 9010: 1, 40555: 1})
+        self.assertEqual(timeline.entries[0]["hex"], fake_frame(49991).hex().upper())
+        self.assertEqual(timeline.summary(), {49991: 2, 49992: 1, 40555: 1})
 
     def test_normal_flow_codes_are_not_flagged_unknown(self):
         timeline, clock = self._timeline()
@@ -262,13 +262,13 @@ class TimelineTests(unittest.TestCase):
         clock["now"] = 100.0
         timeline.add(fake_frame(20501, payload=struct.pack("<f", 1.0)), 20501)
         clock["now"] = 100.05
-        timeline.add(fake_frame(40517), 40517)       # 紧跟在遥测后面，不能被限速吞掉
-        self.assertEqual([e["code"] for e in timeline.entries], [20501, 40517])
+        timeline.add(fake_frame(49991), 49991)       # 紧跟在遥测后面，不能被限速吞掉
+        self.assertEqual([e["code"] for e in timeline.entries], [20501, 49991])
 
     def test_hard_cap_counts_dropped(self):
         timeline, clock = self._timeline()
         for index in range(brew.TIMELINE_LIMIT + 5):
-            timeline.add(fake_frame(9010), 9010)
+            timeline.add(fake_frame(49991), 49991)
         self.assertEqual(len(timeline.entries), brew.TIMELINE_LIMIT)
         self.assertEqual(timeline.dropped, 5)
 
@@ -291,7 +291,7 @@ class TimelineTests(unittest.TestCase):
         session = FakeSession()
         session.timeline.begin()
         session.timeline.add(fake_frame(40510), 40510)
-        session.timeline.add(fake_frame(40517), 40517, "update")
+        session.timeline.add(fake_frame(49991), 49991, "update")
         with tempfile.TemporaryDirectory() as temp:
             os.environ["XBLOOM_RUNS_DIR"] = temp
             self.addCleanup(os.environ.pop, "XBLOOM_RUNS_DIR", None)
@@ -300,9 +300,9 @@ class TimelineTests(unittest.TestCase):
                                    4, 208.5, session)
             text = next(Path(temp).glob("*.json")).read_text()
         record = json.loads(text)
-        self.assertEqual([e["code"] for e in record["timeline"]], [40510, 40517])
+        self.assertEqual([e["code"] for e in record["timeline"]], [40510, 49991])
         self.assertEqual(record["timeline"][1]["t"], 118.0)
-        self.assertEqual(record["timeline_unknown_codes"], {"40517": 1})
+        self.assertEqual(record["timeline_unknown_codes"], {"49991": 1})
         self.assertEqual(text.count('"hex"'), 2)
         self.assertTrue(all("hex" in line for line in text.splitlines() if '"t":' in line),
                         "时间线每条应在同一行")
@@ -377,7 +377,7 @@ class ListenTests(unittest.TestCase):
 
     def test_listen_log_written_with_timeline_and_unknowns(self):
         folder = self._run_dir()
-        session = self._session([(3.0, 40517), (9.0, 8009)])
+        session = self._session([(3.0, 49991), (9.0, 8009)])
         with contextlib.redirect_stdout(io.StringIO()):
             brew.write_listen_log(session, 61.2, note="步骤6 睡眠")
         files = list(folder.glob("*-listen.json"))
@@ -386,8 +386,8 @@ class ListenTests(unittest.TestCase):
         self.assertEqual(record["kind"], "listen")
         self.assertEqual(record["duration_s"], 61.2)
         self.assertEqual(record["note"], "步骤6 睡眠")
-        self.assertEqual([e["code"] for e in record["timeline"]], [40517, 8009])
-        self.assertEqual(record["timeline_unknown_codes"], {"40517": 1})
+        self.assertEqual([e["code"] for e in record["timeline"]], [49991, 8009])
+        self.assertEqual(record["timeline_unknown_codes"], {"49991": 1})
         self.assertEqual(record["machine"], {"serial": "T"})
 
     def test_listen_log_written_even_when_silent(self):
@@ -407,3 +407,24 @@ class ListenTests(unittest.TestCase):
         self.assertEqual(hit.exception.code, 0)
         for flag in ("--seconds", "--note", "--verbose"):
             self.assertIn(flag, out.getvalue())
+
+
+class MappedCodesTests(unittest.TestCase):
+    """2026-11-09 真机测绘回来的码，不能再被标"不认识"。#17"""
+
+    MAPPED = (9010, 9011, 40515, 40516, 40517, 40522, 50029, 50036, 65534,
+              8100, 8022, 8017, 8102, 8104, 8001, 8004, 8002, 11511,
+              40505, 40526, 40506, 40507)
+
+    def test_mapped_codes_not_flagged_unknown(self):
+        clock = {"now": 0.0}
+        timeline = brew.Timeline(clock=lambda: clock["now"])
+        timeline.begin()
+        for i, code in enumerate(self.MAPPED):
+            clock["now"] = float(i)
+            timeline.add(fake_frame(code), code)
+        self.assertEqual(timeline.summary(), {})
+
+    def test_mapped_codes_have_names(self):
+        for code in (9010, 9011, 40515, 40516, 40517):
+            self.assertIn(code, brew.CODE_NAMES)
