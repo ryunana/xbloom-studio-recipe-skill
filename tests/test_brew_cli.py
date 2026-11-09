@@ -352,3 +352,58 @@ class PersonalRecipeTests(unittest.TestCase):
         tracked = subprocess.run(["git", "ls-files", "recipes"], cwd=ROOT,
                                  capture_output=True, text=True).stdout.split()
         self.assertEqual(tracked, ["recipes/README.md"])
+
+
+class ListenTests(unittest.TestCase):
+    """listen 监听模式：被动记录机器通知，测绘"什么情况发什么码"。#15"""
+
+    def _session(self, entries):
+        import types
+        clock = {"now": 0.0}
+        timeline = brew.Timeline(clock=lambda: clock["now"])
+        timeline.begin()
+        for at, code in entries:
+            clock["now"] = at
+            timeline.add(fake_frame(code), code, "update")
+        return types.SimpleNamespace(info={"serial": "T"}, timeline=timeline)
+
+    def _run_dir(self):
+        import tempfile
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        os.environ["XBLOOM_RUNS_DIR"] = temp.name
+        self.addCleanup(os.environ.pop, "XBLOOM_RUNS_DIR", None)
+        return Path(temp.name)
+
+    def test_listen_log_written_with_timeline_and_unknowns(self):
+        folder = self._run_dir()
+        session = self._session([(3.0, 40517), (9.0, 8009)])
+        with contextlib.redirect_stdout(io.StringIO()):
+            brew.write_listen_log(session, 61.2, note="步骤6 睡眠")
+        files = list(folder.glob("*-listen.json"))
+        self.assertEqual(len(files), 1)
+        record = json.loads(files[0].read_text())
+        self.assertEqual(record["kind"], "listen")
+        self.assertEqual(record["duration_s"], 61.2)
+        self.assertEqual(record["note"], "步骤6 睡眠")
+        self.assertEqual([e["code"] for e in record["timeline"]], [40517, 8009])
+        self.assertEqual(record["timeline_unknown_codes"], {"40517": 1})
+        self.assertEqual(record["machine"], {"serial": "T"})
+
+    def test_listen_log_written_even_when_silent(self):
+        """机器一条没发也要写文件："沉默"是排查结论，不能和"没记"混淆。"""
+        folder = self._run_dir()
+        session = self._session([])
+        with contextlib.redirect_stdout(io.StringIO()):
+            brew.write_listen_log(session, 30.0)
+        record = json.loads(next(folder.glob("*-listen.json")).read_text())
+        self.assertEqual(record["timeline"], [])
+        self.assertEqual(record["timeline_unknown_codes"], {})
+
+    def test_listen_help_lists_seconds_and_note(self):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), self.assertRaises(SystemExit) as hit:
+            brew.main(["listen", "--help"])
+        self.assertEqual(hit.exception.code, 0)
+        for flag in ("--seconds", "--note", "--verbose"):
+            self.assertIn(flag, out.getvalue())

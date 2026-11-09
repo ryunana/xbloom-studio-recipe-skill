@@ -10,6 +10,7 @@
 用法：
   python3 scripts/xbloom_brew.py scan
   python3 scripts/xbloom_brew.py info
+  python3 scripts/xbloom_brew.py listen --seconds 300                        # 只监听，记录每条通知
   python3 scripts/xbloom_brew.py brew --recipe recipes/current.json           # 干跑
   python3 scripts/xbloom_brew.py brew --recipe recipes/current.json --load    # 装载，不出水
   python3 scripts/xbloom_brew.py brew --recipe recipes/current.json --start   # 真冲
@@ -61,6 +62,15 @@ EVENT_FAULT = {8203: "磨盘位置异常", 8204: "投粉或水量异常"}
 EVENT_POUR = 40510
 EVENT_SLEEPING = 8009    # RD_MachineSleeping
 EVENT_AWAKE = 8011       # RD_MachineNotSleeping
+
+# listen 模式的实时显示用：每个已知码配一句人话
+CODE_NAMES = {
+    EVENT_INFO: "机器信息", EVENT_POUR: "注水段", EVENT_DONE: "完成",
+    40511: "停止", 40519: "停止", EVENT_NO_WATER: "缺水",
+    EVENT_SLEEPING: "入睡", EVENT_AWAKE: "唤醒",
+    8023: "活动状态", 40502: "咖啡开始", 40513: "收尾",
+    8203: "磨盘位置异常", 8204: "投粉或水量异常",
+}
 
 # 高频遥测：重量 / 水量约每 0.1 秒一条，一杯 3 分钟近 2000 条，全记会让记录文件失控。
 # 这两类每秒最多留一条；其余一切（包括没见过的码）每条都留。#13 #6
@@ -228,13 +238,18 @@ def dump_record(record: dict) -> str:
     return text.replace('"@@TIMELINE@@"', "[\n" + lines + "\n  ]")
 
 
+def runs_dir() -> Path:
+    folder = Path(os.environ.get("XBLOOM_RUNS_DIR")
+                  or (Path(__file__).resolve().parent.parent / "runs"))
+    if not folder.is_dir():
+        folder.mkdir(parents=True)
+    return folder
+
+
 def write_run_log(payload, outcome, pours_seen, duration, session, note=None):
     """每次冲煮留一条记录。没有口感也能用：机器侧的数据本身就是证据。"""
     try:
-        folder = Path(os.environ.get("XBLOOM_RUNS_DIR")
-                      or (Path(__file__).resolve().parent.parent / "runs"))
-        if not folder.is_dir():
-            folder.mkdir(parents=True)
+        folder = runs_dir()
         brewer = recipe_preview.brewer_of(payload)
         record = {
             "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
@@ -381,8 +396,11 @@ async def find_device(timeout=12.0, address=None, name=None):
     return device
 
 
-async def require_linked(args):
-    """连上并完成握手。返回 (client, session)；失败抛异常。"""
+async def require_linked(args, record_from_connect=False):
+    """连上并完成握手。返回 (client, session)；失败抛异常。
+
+    record_from_connect=True 时时间线从连接瞬间起算（listen 模式用），
+    握手应答、机器信息帧也会进记录。"""
     from bleak import BleakClient
     target = await find_device(getattr(args, "scan_timeout", 12.0), args.address, args.name)
     if target is None:
@@ -394,6 +412,8 @@ async def require_linked(args):
     await client.connect()
     session = Session()
     session.initial_mode = None
+    if record_from_connect:
+        session.timeline.begin()
     await client.start_notify(CHAR_STATUS, session.on_notify)
 
     acked = False
@@ -595,6 +615,82 @@ async def run_info(args):
     client, _session = await require_linked(args)
     await asyncio.sleep(1.0)
     await client.disconnect()
+    return 0
+
+
+def write_listen_log(session, duration, note=None):
+    """监听记录：机器发来的每一条通知，带相对时间和原始字节（#15）。
+
+    安静也是结果——什么都没收到照样写文件，排查时能区分"机器没发"和"我们没记"。"""
+    try:
+        timeline = session.timeline
+        record = {
+            "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "kind": "listen",
+            "duration_s": round(duration, 1),
+            "machine": session.info or {},
+            "note": note,
+            "timeline": timeline.entries,
+            "timeline_unknown_codes": timeline.summary(),
+        }
+        if timeline.dropped:
+            record["timeline_dropped"] = timeline.dropped
+        name = time.strftime("%Y%m%d-%H%M%S") + "-listen.json"
+        (runs_dir() / name).write_text(dump_record(record))
+        say(f"\n监听记录已存：runs/{name}（{len(timeline.entries)} 条通知）")
+        unknown = timeline.summary()
+        if unknown:
+            say(f"  其中不认识的码：{sorted(unknown)}")
+    except Exception as exc:  # noqa: BLE001
+        say(f"（记录没写成功：{exc}）")
+
+
+async def run_listen(args):
+    """只听不发：把机器发来的每条通知记下来，用于测绘"什么情况机器发什么码"（#15）。
+
+    测绘时段冲煮请用 brew --start（它从执行起就全程记录）；listen 负责连接、
+    空闲、休眠、面板操作这些冲煮流程覆盖不到的时刻。"""
+    if not require_bluetooth(args.force, announce=True):
+        return 2
+    client, session = await require_linked(args, record_from_connect=True)
+    started = time.monotonic()
+    noted_unknown = set()
+    say("")
+    say(f"已连上，只听不发。监听 {args.seconds:g} 秒，Ctrl+C 随时停，记录照样存盘。")
+    say("这期间你在机器上做的任何操作（按键、暂停、让它睡着）都会被记下时间。")
+    next_tick = started + 60
+    try:
+        while time.monotonic() - started < args.seconds:
+            try:
+                event = await asyncio.wait_for(session.events.get(), timeout=5)
+            except asyncio.TimeoutError:
+                if time.monotonic() >= next_tick:
+                    say(f"  （{int(time.monotonic() - started)} 秒，还在听，机器安静）")
+                    next_tick = time.monotonic() + 60
+                continue
+            at = int(time.monotonic() - started)
+            stamp = f"{at // 60}:{at % 60:02d}"
+            code = event.get("code")
+            if code is None:
+                say(f"  {stamp} 收到一条解不开的数据（{event.get('raw', '')[:40]}…）")
+                continue
+            if code in TELEMETRY_CODES and not args.verbose:
+                continue
+            name = CODE_NAMES.get(code, "")
+            line = f"  {stamp} {code} {event.get('status') or ''} {name}".rstrip()
+            if code not in KNOWN_CODES and code not in EVENT_FAULT:
+                if code in noted_unknown:
+                    continue
+                noted_unknown.add(code)
+                line += "  ← 不认识，已记下；屏幕上这时有什么字请留意"
+            say(line)
+    finally:
+        write_listen_log(session, time.monotonic() - started, note=args.note)
+        try:
+            await client.disconnect()
+        except Exception:  # noqa: BLE001
+            pass
+    say("监听结束。")
     return 0
 
 
@@ -1069,6 +1165,14 @@ def main(argv=None):
     info = sub.add_parser("info", help="连上并读机器信息（不出水、不磨豆）")
     add_common(info)
     info.set_defaults(func=run_info)
+
+    listen = sub.add_parser("listen", help="只监听不动作：把机器发的每条通知记进 runs/（排查用）")
+    listen.add_argument("--seconds", type=float, default=300.0,
+                        help="监听秒数，Ctrl+C 可提前结束，记录照常保存")
+    listen.add_argument("--note", default=None, help="备注，写进监听记录（如「步骤3：按暂停」）")
+    listen.add_argument("--verbose", action="store_true", help="连重量/水量遥测也打印")
+    add_common(listen)
+    listen.set_defaults(func=run_listen)
 
     brew = sub.add_parser("brew", help="装载 / 启动一份复核过的配方")
     brew.add_argument("--recipe", required=True)
