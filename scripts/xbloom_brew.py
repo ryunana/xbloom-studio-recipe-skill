@@ -55,30 +55,47 @@ FRAME_GAP = 0.4          # 帧间最小间隔，机器需要喘息
 SETTLE_AFTER_SESSION = 2.0
 
 EVENT_INFO = 40521       # 机器信息（序列号 / 固件 / 单位 / 模式）
-EVENT_DONE = 40512       # RD_ENJOY：机器自己说冲完了
+EVENT_DONE = 40512       # RD_ENJOY：机器自己说冲完了（固件 V12.0D.400 实测不发，#6）
 EVENT_STOPPED = {40511, 40519}
 EVENT_NO_WATER = 40522
 EVENT_FAULT = {8203: "磨盘位置异常", 8204: "投粉或水量异常"}
 EVENT_POUR = 40510
 EVENT_SLEEPING = 8009    # RD_MachineSleeping
 EVENT_AWAKE = 8011       # RD_MachineNotSleeping
+# 2026-11-09 真机测绘（#17）：屏幕状态 ↔ 通知码
+EVENT_PAUSE = 9010       # 人在机器上按暂停；手动中止前也会先发它
+EVENT_RESUME = 9011      # 人按恢复
+EVENT_HELD = 40515       # 冲煮挂起：机器自己 WAIT、人暂停、缺水都用它
+EVENT_RELEASED = 40516  # 挂起解除（WAIT 结束 / 续冲）
+EVENT_IDLING = 40517     # 空转告警：实测对应 +BEANS（开源表 Error: Idling）
+EVENT_WRAPUP = 40513     # 收尾：挂起后中止、或按键退出完成页时发
 
 # listen 模式的实时显示用：每个已知码配一句人话
 CODE_NAMES = {
     EVENT_INFO: "机器信息", EVENT_POUR: "注水段", EVENT_DONE: "完成",
     40511: "停止", 40519: "停止", EVENT_NO_WATER: "缺水",
     EVENT_SLEEPING: "入睡", EVENT_AWAKE: "唤醒",
-    8023: "活动状态", 40502: "咖啡开始", 40513: "收尾",
+    EVENT_PAUSE: "暂停", EVENT_RESUME: "恢复",
+    EVENT_HELD: "挂起", EVENT_RELEASED: "解除挂起",
+    EVENT_IDLING: "空转告警", EVENT_WRAPUP: "收尾",
+    8023: "活动状态", 40502: "咖啡开始",
     8203: "磨盘位置异常", 8204: "投粉或水量异常",
+    8100: "握手应答", 8022: "回主屏", 8017: "退出配方页", 8102: "粉量",
+    8104: "杯型", 8001: "配方", 8004: "配方", 8002: "执行", 11511: "模式",
+    50029: "状态上报", 50036: "机器忙", 65534: "忙/占用",
+    40505: "研磨阶段", 40526: "研磨阶段", 40506: "研磨阶段", 40507: "研磨告警",
 }
 
 # 高频遥测：重量 / 水量约每 0.1 秒一条，一杯 3 分钟近 2000 条，全记会让记录文件失控。
 # 这两类每秒最多留一条；其余一切（包括没见过的码）每条都留。#13 #6
 TELEMETRY_CODES = {20501: "重量", 40523: "水量"}
 # 已经认识、不用提醒的码：日常心跳/回显（8023 活动状态等）也算，避免每杯都弹提示
-# 40502 咖啡开始、40513 收尾通知：同类项目抓包里每杯都有，属正常流程。
+# 40502 咖啡开始、40513 收尾：同类项目抓包里每杯都有，属正常流程。
+# 命令应答与研磨阶段码（40505/40526/40506/40507，语义未完全确认）都属已知范围。#17
 KNOWN_CODES = {EVENT_INFO, EVENT_DONE, EVENT_POUR, EVENT_NO_WATER, EVENT_SLEEPING, EVENT_AWAKE,
-               8023, 40502, 40513, *EVENT_STOPPED, *TELEMETRY_CODES}
+               EVENT_PAUSE, EVENT_RESUME, EVENT_HELD, EVENT_RELEASED, EVENT_IDLING, EVENT_WRAPUP,
+               8023, 40502, 40505, 40526, 40506, 40507, *EVENT_STOPPED, *TELEMETRY_CODES,
+               8100, 8022, 8017, 8102, 8104, 8001, 8004, 8002, 11511, 50029, 50036, 65534}
 TIMELINE_LIMIT = 3000   # 兜底，防止异常刷屏
 
 
@@ -556,6 +573,27 @@ async def run_brew(args):
                 outcome = "no_water"
                 write_run_log(payload, outcome, pours_seen, time.monotonic() - started, session, args.note)
                 return 1
+            elif code == EVENT_PAUSE:
+                say("  机器被暂停了（你在机器上按的）。")
+            elif code == EVENT_RESUME:
+                say("  机器继续了。")
+            elif code == EVENT_HELD:
+                say("  机器挂起了——屏幕上如果显示 WAIT，就是现在。")
+            elif code == EVENT_RELEASED:
+                say("  机器恢复出水了。")
+            elif code == EVENT_IDLING:
+                say("  机器报空转——看一眼屏幕，多半是 +BEANS 这类提示。处理好它会自己继续。")
+            elif code == EVENT_WRAPUP:
+                # 挂起/暂停后再按停止，机器走"收尾"而不是"停止"码（实测 #17）。
+                # 冲煮已结束：段数齐全算成功，否则算中止，不再干等超时。
+                if pours_seen >= len(pours_plan):
+                    say("  水都注完了，机器收尾。")
+                    outcome = "completed_no_signal"
+                else:
+                    say("  这杯被中止了。看一眼杯里有多少水，告诉我。")
+                    outcome = "stopped"
+                write_run_log(payload, outcome, pours_seen, time.monotonic() - started, session, args.note)
+                return 0 if brew_succeeded(outcome) else 1
             elif code in EVENT_FAULT:
                 say(f"  机器报了个问题：{EVENT_FAULT_PLAIN[code]}。先别继续，看一眼机器。")
                 outcome = "fault"
