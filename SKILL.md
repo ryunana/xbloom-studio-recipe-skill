@@ -3,7 +3,7 @@ name: xbloom-studio-recipe
 description: Generate device-constrained xBloom Studio App recipes from coffee-bean parameters, with C40 conversion, RO-water compensation and one-variable troubleshooting; then load and brew the reviewed recipe on a real machine over local Bluetooth.
 license: MIT
 metadata:
-  version: 1.4.1
+  version: 1.4.2
   author: chengway.wang
   platforms: [macos, linux, windows]
   tags: [coffee, xbloom, xbloom-studio, brewing, recipe, pourover, bluetooth]
@@ -46,6 +46,8 @@ Use this skill when the user asks for:
 - Brewing that recipe on the machine over this computer's own Bluetooth, when the
   machine is in reach; connection check, load, start, pause and stop
 - Reading the machine's own state: serial, firmware, mode, grind setting, live weight
+- Passive listening: `listen` records every notification the machine emits while
+  you operate it by hand — for mapping screen states (`WAIT`, pause, sleep) to codes
 
 Do not use this for espresso recipes unless the user explicitly wants to use the xBloom grinder as a standalone grinder. This skill is for xBloom Studio automated pour-over / Copilot recipes.
 
@@ -172,6 +174,12 @@ Rules that are not negotiable, each backed by a capture or the firmware:
   at that moment in the latest record before guessing. Do not tell the user the code
   numbers; say what happened. If an unknown code lines up with what they saw, report it
   on the open GitHub issue (#13 for WAIT, #6 for the finish signal) with the record.
+- **To watch outside a brew, use `listen`:** `xbloom_brew.py listen --seconds 300`
+  connects, sends nothing, and writes every notification — including ones during
+  panel operations, pause, sleep/wake — into `runs/*-listen.json`. During a brew use
+  `brew --start` instead: its timeline already records the same stream. Silence is a
+  valid result: if the screen showed `WAIT` but the record has nothing at that time,
+  the machine never sent it and the search must look elsewhere.
 
 Practical notes:
 
