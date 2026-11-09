@@ -3,7 +3,7 @@ name: xbloom-studio-recipe
 description: Generate device-constrained xBloom Studio App recipes from coffee-bean parameters, with C40 conversion, RO-water compensation and one-variable troubleshooting; then load and brew the reviewed recipe on a real machine over local Bluetooth.
 license: MIT
 metadata:
-  version: 1.4.0
+  version: 1.4.1
   author: chengway.wang
   platforms: [macos, linux, windows]
   tags: [coffee, xbloom, xbloom-studio, brewing, recipe, pourover, bluetooth]
@@ -164,6 +164,14 @@ Rules that are not negotiable, each backed by a capture or the firmware:
   a stop ack" as a finished cup and say so plainly — never tell the person it failed
   when the water already went through.
 - Never retry a sent command automatically. On timeout, look at the machine first.
+- **Every brew record carries a notification timeline** (`timeline` in `runs/*.json`:
+  seconds since the brew started, code, raw bytes; weight/volume telemetry thinned to
+  one per second). `timeline_unknown_codes` lists codes this skill does not recognise.
+  When the user reports something the script never mentioned — a `WAIT` on screen, a
+  missing finish signal — ask roughly **when** they saw it (minutes:seconds) and look
+  at that moment in the latest record before guessing. Do not tell the user the code
+  numbers; say what happened. If an unknown code lines up with what they saw, report it
+  on the open GitHub issue (#13 for WAIT, #6 for the finish signal) with the record.
 
 Practical notes:
 

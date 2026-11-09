@@ -208,6 +208,132 @@ class BrewerTests(unittest.TestCase):
         self.assertIn("issues/new", out.getvalue())
 
 
+
+def fake_frame(code, status=0xC1, payload=b""):
+    """造一条机器通知帧：58 02 07 [code][len][status][payload][crc 占位]。"""
+    length = 12 + len(payload)
+    return (bytes([0x58, 0x02, 0x07]) + struct.pack("<H", code) + struct.pack("<I", length)
+            + bytes([status]) + payload + b"\x00\x00")
+
+
+class TimelineTests(unittest.TestCase):
+    """冲煮通知时间线：WAIT 和"完成"信号都靠它事后对时间。#13 #6"""
+
+    def _timeline(self):
+        clock = {"now": 100.0}
+        timeline = brew.Timeline(clock=lambda: clock["now"])
+        timeline.begin()
+        return timeline, clock
+
+    def test_nothing_recorded_before_brew_starts(self):
+        timeline = brew.Timeline()
+        timeline.add(fake_frame(40510), 40510)
+        self.assertEqual(timeline.entries, [])
+
+    def test_unknown_codes_are_all_kept_with_raw_bytes_and_time(self):
+        timeline, clock = self._timeline()
+        for step, code in enumerate((40517, 40517, 9010, 40555)):
+            clock["now"] = 100.0 + 118.0 + step
+            frame = fake_frame(code)
+            timeline.add(frame, code, "update")
+        self.assertEqual([e["code"] for e in timeline.entries], [40517, 40517, 9010, 40555])
+        self.assertEqual(timeline.entries[0]["t"], 118.0)
+        self.assertEqual(timeline.entries[0]["hex"], fake_frame(40517).hex().upper())
+        self.assertEqual(timeline.summary(), {40517: 2, 9010: 1, 40555: 1})
+
+    def test_normal_flow_codes_are_not_flagged_unknown(self):
+        timeline, clock = self._timeline()
+        for code in (40502, 40510, 40511, 40512, 40513, 8023):
+            timeline.add(fake_frame(code), code)
+        self.assertEqual(timeline.summary(), {})
+
+    def test_telemetry_is_thinned_to_one_per_second(self):
+        timeline, clock = self._timeline()
+        for tick in range(100):                      # 10 秒，每 0.1 秒一条
+            clock["now"] = 100.0 + tick * 0.1
+            timeline.add(fake_frame(20501, payload=struct.pack("<f", 12.5)), 20501)
+        self.assertLessEqual(len(timeline.entries), 11)
+        self.assertGreaterEqual(len(timeline.entries), 9)
+        self.assertEqual(timeline.entries[0]["value"], 12.5)
+        self.assertEqual(timeline.summary(), {})     # 遥测不算"没见过"
+
+    def test_telemetry_does_not_hide_other_events(self):
+        timeline, clock = self._timeline()
+        clock["now"] = 100.0
+        timeline.add(fake_frame(20501, payload=struct.pack("<f", 1.0)), 20501)
+        clock["now"] = 100.05
+        timeline.add(fake_frame(40517), 40517)       # 紧跟在遥测后面，不能被限速吞掉
+        self.assertEqual([e["code"] for e in timeline.entries], [20501, 40517])
+
+    def test_hard_cap_counts_dropped(self):
+        timeline, clock = self._timeline()
+        for index in range(brew.TIMELINE_LIMIT + 5):
+            timeline.add(fake_frame(9010), 9010)
+        self.assertEqual(len(timeline.entries), brew.TIMELINE_LIMIT)
+        self.assertEqual(timeline.dropped, 5)
+
+    def test_session_records_before_parsing(self):
+        """哪怕后面的解析把帧当成"不认识"，时间线里也要有。"""
+        session = brew.Session()
+        session.timeline.begin()
+        session.on_notify(None, bytearray(fake_frame(40517)))
+        session.on_notify(None, bytearray(b"\x58\x02\x07"))        # 残帧：不能崩
+        self.assertEqual([e["code"] for e in session.timeline.entries], [40517])
+
+    def test_run_log_contains_timeline_and_stays_valid_json(self):
+        import tempfile
+
+        class FakeSession:
+            info = {}
+            initial_mode = None
+            timeline = brew.Timeline(clock=iter([0.0, 5.0, 118.0, 118.5]).__next__)
+
+        session = FakeSession()
+        session.timeline.begin()
+        session.timeline.add(fake_frame(40510), 40510)
+        session.timeline.add(fake_frame(40517), 40517, "update")
+        with tempfile.TemporaryDirectory() as temp:
+            os.environ["XBLOOM_RUNS_DIR"] = temp
+            self.addCleanup(os.environ.pop, "XBLOOM_RUNS_DIR", None)
+            with contextlib.redirect_stdout(io.StringIO()):
+                brew.write_run_log(json.loads(EXAMPLE.read_text()), "completed_no_signal",
+                                   4, 208.5, session)
+            text = next(Path(temp).glob("*.json")).read_text()
+        record = json.loads(text)
+        self.assertEqual([e["code"] for e in record["timeline"]], [40510, 40517])
+        self.assertEqual(record["timeline"][1]["t"], 118.0)
+        self.assertEqual(record["timeline_unknown_codes"], {"40517": 1})
+        self.assertEqual(text.count('"hex"'), 2)
+        self.assertTrue(all("hex" in line for line in text.splitlines() if '"t":' in line),
+                        "时间线每条应在同一行")
+
+    def test_run_log_without_timeline_is_unchanged(self):
+        """老路径（没有时间线）的记录字段不变。"""
+        class FakeSession:
+            info = {}
+            initial_mode = None
+        import tempfile
+        with tempfile.TemporaryDirectory() as temp:
+            os.environ["XBLOOM_RUNS_DIR"] = temp
+            self.addCleanup(os.environ.pop, "XBLOOM_RUNS_DIR", None)
+            with contextlib.redirect_stdout(io.StringIO()):
+                brew.write_run_log(json.loads(EXAMPLE.read_text()), "completed", 4, 1.0, FakeSession())
+            record = json.loads(next(Path(temp).glob("*.json")).read_text())
+        self.assertNotIn("timeline", record)
+
+    def test_say_flushes_immediately(self):
+        """经过 | tee 这类管道时也要实时显示（2026-11-09 冲煮时输出被缓冲，看不到进度）。"""
+        class Probe(io.StringIO):
+            flushes = 0
+
+            def flush(self):
+                Probe.flushes += 1
+        probe = Probe()
+        with contextlib.redirect_stdout(probe):
+            brew.say("hello")
+        self.assertGreaterEqual(Probe.flushes, 1)
+
+
 if __name__ == "__main__":
     unittest.main()
 

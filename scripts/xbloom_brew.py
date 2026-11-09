@@ -62,6 +62,63 @@ EVENT_POUR = 40510
 EVENT_SLEEPING = 8009    # RD_MachineSleeping
 EVENT_AWAKE = 8011       # RD_MachineNotSleeping
 
+# 高频遥测：重量 / 水量约每 0.1 秒一条，一杯 3 分钟近 2000 条，全记会让记录文件失控。
+# 这两类每秒最多留一条；其余一切（包括没见过的码）每条都留。#13 #6
+TELEMETRY_CODES = {20501: "重量", 40523: "水量"}
+# 已经认识、不用提醒的码：日常心跳/回显（8023 活动状态等）也算，避免每杯都弹提示
+# 40502 咖啡开始、40513 收尾通知：同类项目抓包里每杯都有，属正常流程。
+KNOWN_CODES = {EVENT_INFO, EVENT_DONE, EVENT_POUR, EVENT_NO_WATER, EVENT_SLEEPING, EVENT_AWAKE,
+               8023, 40502, 40513, *EVENT_STOPPED, *TELEMETRY_CODES}
+TIMELINE_LIMIT = 3000   # 兜底，防止异常刷屏
+
+
+class Timeline:
+    """冲煮期间收到的每一条通知，带相对时间和原始字节。
+
+    目的：WAIT、完成信号这类"屏幕上看得到、脚本里看不到"的事，事后能从时间线里对上。
+    """
+
+    def __init__(self, clock=time.monotonic):
+        self._clock = clock
+        self._start = None
+        self._last_telemetry = {}
+        self.entries = []
+        self.dropped = 0
+
+    def begin(self):
+        self._start = self._clock()
+
+    def add(self, packet: bytes, code, status=None):
+        if self._start is None:
+            return
+        now = self._clock() - self._start
+        if code in TELEMETRY_CODES:
+            if now - self._last_telemetry.get(code, -1.0) < 1.0:
+                return
+            self._last_telemetry[code] = now
+        if len(self.entries) >= TIMELINE_LIMIT:
+            self.dropped += 1
+            return
+        entry = {"t": round(now, 1), "code": code, "hex": packet.hex().upper()}
+        if status:
+            entry["status"] = status
+        if code in TELEMETRY_CODES and len(packet) >= 14:
+            try:
+                entry["value"] = round(struct.unpack_from("<f", packet, 10)[0], 1)
+            except struct.error:
+                pass
+        self.entries.append(entry)
+
+    def summary(self):
+        """记录里的"没见过的码"清单：下次对照协议表时先看这里。"""
+        known = KNOWN_CODES
+        seen = {}
+        for entry in self.entries:
+            code = entry["code"]
+            if code not in known and code not in EVENT_FAULT:
+                seen[code] = seen.get(code, 0) + 1
+        return seen
+
 
 class Assembler:
     """机器可能把一帧拆成两条通知发，这里按长度字段拼回完整帧。
@@ -131,7 +188,7 @@ CUP_WEIGHT_FACTOR = 0.9634      # 93℃ 水密度：240 毫升 ≈ 231 克
 
 
 def say(text=""):
-    print(text)
+    print(text, flush=True)
 
 
 def human_failure(exc: Exception) -> str:
@@ -159,6 +216,18 @@ def brew_succeeded(outcome: str) -> bool:
     return outcome in ("completed", "completed_no_signal")
 
 
+def dump_record(record: dict) -> str:
+    """缩进输出，但时间线每条压成一行（一杯上百条，逐字段换行会难以阅读）。"""
+    entries = record.get("timeline")
+    if not entries:
+        return json.dumps(record, ensure_ascii=False, indent=2)
+    shell = dict(record, timeline="@@TIMELINE@@")
+    text = json.dumps(shell, ensure_ascii=False, indent=2)
+    lines = ",\n".join("    " + json.dumps(e, ensure_ascii=False, separators=(", ", ": "))
+                       for e in entries)
+    return text.replace('"@@TIMELINE@@"', "[\n" + lines + "\n  ]")
+
+
 def write_run_log(payload, outcome, pours_seen, duration, session, note=None):
     """每次冲煮留一条记录。没有口感也能用：机器侧的数据本身就是证据。"""
     try:
@@ -181,8 +250,14 @@ def write_run_log(payload, outcome, pours_seen, duration, session, note=None):
             "mode_before": session.initial_mode,
             "taste_note": note,
         }
+        timeline = getattr(session, "timeline", None)
+        if timeline is not None and timeline.entries:
+            record["timeline"] = timeline.entries
+            record["timeline_unknown_codes"] = timeline.summary()
+            if timeline.dropped:
+                record["timeline_dropped"] = timeline.dropped
         name = time.strftime("%Y%m%d-%H%M%S") + f"-{outcome}.json"
-        (folder / name).write_text(json.dumps(record, ensure_ascii=False, indent=2))
+        (folder / name).write_text(dump_record(record))
         say(f"\n这次冲煮已记录：runs/{name}")
         if not note:
             say("（口感是选填的。你说一句，我就把这条记录补上，下次调整有据可依。）")
@@ -237,10 +312,21 @@ class Session:
         self.info = None
         self.sleeping = None      # None = 未知，True/False 由 8009/8011 更新
         self._assembler = Assembler()
+        self.timeline = Timeline()
 
     def on_notify(self, _char, data: bytearray):
         for packet in self._assembler.feed(bytes(data)):
+            self._record(packet)
             self._handle(packet)
+
+    def _record(self, packet: bytes):
+        """先记再处理：不管后面怎么解析、有没有人认识这个码。"""
+        if len(packet) >= 5 and packet[0] == 0x58:
+            code = struct.unpack("<H", packet[3:5])[0]
+            status = {0xC1: "update", 0xC2: "ack"}.get(packet[9]) if len(packet) > 9 else None
+        else:
+            code, status = None, None
+        self.timeline.add(packet, code, status)
 
     def _handle(self, packet: bytes):
         info = decode_machine_info(packet)
@@ -388,6 +474,7 @@ async def run_brew(args):
     started = time.monotonic()
     pours_plan = payload["recipe"]["pours"]
     outcome, pours_seen = "unknown", 0
+    noted_unknown = set()
     try:
         async def send_confirmed(label, packet, attempts=3, required=True):
             code = struct.unpack("<H", packet[3:5])[0]
@@ -420,6 +507,7 @@ async def run_brew(args):
                     say("配方已经装进机器了，还没放水。想冲的时候跟我说「开始」。")
                     return 0
                 say("开始冲煮，手离开机器。")
+                session.timeline.begin()
                 await asyncio.sleep(3)
             if args.verbose:
                 say(f"  {label}")
@@ -433,6 +521,12 @@ async def run_brew(args):
             except asyncio.TimeoutError:
                 continue
             code = event.get("code")
+            if (code is not None and code not in KNOWN_CODES and code not in EVENT_FAULT
+                    and code not in noted_unknown):
+                noted_unknown.add(code)
+                at = int(time.monotonic() - started)
+                say(f"  （{at // 60}:{at % 60:02d} 机器发来一条我不认识的消息，已记下；"
+                    f"如果这时屏幕上出现了 WAIT 之类的字，请记下大概几分几秒。）")
             if code == EVENT_POUR:
                 pours_seen += 1
                 seg = pours_plan[min(pours_seen - 1, len(pours_plan) - 1)]
