@@ -10,7 +10,7 @@
     {
       "name": "xbloom-studio-recipe",
       "description": "Generate xBloom Studio App / Copilot recipes with C40 conversion, RO-water compensation and troubleshooting; then load and brew the reviewed recipe on a real machine over local Bluetooth (protocol layer byte-verified against captures).",
-      "version": "1.4.4",
+      "version": "1.4.5",
       "author": {
         "name": "CHENGWAY.WANG"
       },
