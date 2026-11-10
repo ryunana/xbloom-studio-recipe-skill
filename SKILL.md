@@ -3,7 +3,7 @@ name: xbloom-studio-recipe
 description: Generate device-constrained xBloom Studio App recipes from coffee-bean parameters, with C40 conversion, RO-water compensation and one-variable troubleshooting; then load and brew the reviewed recipe on a real machine over local Bluetooth.
 license: MIT
 metadata:
-  version: 1.4.4
+  version: 1.4.5
   author: chengway.wang
   platforms: [macos, linux, windows]
   tags: [coffee, xbloom, xbloom-studio, brewing, recipe, pourover, bluetooth]
@@ -174,7 +174,13 @@ Rules that are not negotiable, each backed by a capture or the firmware:
   done screen is dismissed by button (removing the cup does not emit it). A `40513`
   while a brew is still being awaited means the brew was aborted — stop waiting.
   Panel/scale codes (#19): `9002` = enter scale mode, `9008` = exit to home,
-  `9007` = tare. Telemetry semantics verified on hardware: `40523` = cumulative
+  `9007` = tare. Panel/grind codes (#21): `9000` = enter grind mode (payload =
+  current [size, rpm]), `9004` = exit to home, `8105` = confirm grind size
+  (payload = size + 30), `8106` = confirm rpm (payload = rpm); grind stages
+  `40526` start, `40506` running, `40507` stage finished (fires on success too).
+  `8023` payload is the current screen id (1 home, 2 grind, 4/5 scale, 6/7
+  grind-size/rpm sub-pages).
+  Telemetry semantics verified on hardware: `40523` = cumulative
   dispensed water in µL (pauses freeze it, resumes continue exactly), `20501` =
   scale reading in grams (matches the panel; its small in-brew values are not yet
   confirmed — may be flow rate or a tared delta).
